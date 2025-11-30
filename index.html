@@ -1,0 +1,974 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ChocoCost V1.00</title>
+  
+  <!-- 1. STYLE (Tailwind) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ios: {
+              bg: '#f2f2f7', card: '#ffffff', text: '#000000', subtext: '#8e8e93',
+              blue: '#007aff', red: '#ff3b30', gold: '#d4af37', cocoa: '#3e2723',
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- 2. MOTEUR (Babel + React) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+      }
+    }
+  </script>
+
+  <style>
+    body { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-touch-callout: none; }
+    .pt-safe { padding-top: env(safe-area-inset-top); }
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    
+    /* Animation fluide pour les modals */
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    
+    /* Animation fade in */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+
+    /* Animation Scale pour l'alerte */
+    @keyframes scaleIn { from { transform: scale(1.1); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .animate-scale-in { animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+  </style>
+</head>
+<body class="bg-ios-bg text-black h-screen overflow-hidden selection:bg-ios-blue selection:text-white">
+  
+  <div id="root" class="h-full"></div>
+
+  <!-- 3. APPLICATION (Code complet intégré) -->
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useMemo, useRef } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { 
+      LayoutDashboard, ChefHat, Settings, Plus, Trash2, Download, Upload, 
+      ChevronRight, List, X, Search, ChevronLeft 
+    } from 'lucide-react';
+
+    // --- VERSION ---
+    const APP_VERSION = "V1.00";
+
+    // --- DATA & UTILITAIRES ---
+    const generateId = () => Math.random().toString(36).substr(2, 9);
+    
+    const formatCurrency = (amount) => 
+      new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(isNaN(amount) ? 0 : amount);
+
+    const DEFAULT_SETTINGS = { 
+      hourlyRate: 15.00, 
+      defaultMargin: 40, 
+      electricityCost: 0, 
+      wastePercentage: 5, 
+      chefName: 'Chef Audrey' 
+    };
+    
+    const DEFAULT_CATEGORIES = ['Chocolat', 'Fruits Secs', 'Sucre', 'Crèmerie', 'Arômes', 'Confiserie', 'Pâte à tartiner'];
+    
+    // --- LOGIQUE DE CALCUL ---
+    const calculateRecipeMetrics = (recipeId, allRecipes, allIngredients, settings, depth = 0) => {
+      if (depth > 10) return { totalCost: 0, materialCost: 0, laborCost: 0, wasteCost: 0, totalWeight: 0, costPerKg: 0 }; 
+      
+      const recipe = allRecipes.find(r => r.id === recipeId);
+      if (!recipe) return { totalCost: 0, materialCost: 0, laborCost: 0, wasteCost: 0, totalWeight: 0, costPerKg: 0 };
+
+      let totalMatCost = 0;
+      let totalWeight = 0;
+
+      if (recipe.ingredients) {
+        recipe.ingredients.forEach(item => {
+          if (item.recipeId) {
+            totalWeight += item.quantity;
+            const subMetrics = calculateRecipeMetrics(item.recipeId, allRecipes, allIngredients, settings, depth + 1);
+            const subCostPerGram = subMetrics.totalWeight > 0 ? (subMetrics.totalCost / subMetrics.totalWeight) : 0;
+            totalMatCost += item.quantity * subCostPerGram;
+
+          } else if (item.ingredientId) {
+            const ing = allIngredients.find(i => i.id === item.ingredientId);
+            if (ing) {
+              if (ing.unit === 'pce') {
+                totalMatCost += item.quantity * ing.price;
+                if (ing.weightPerUnit) totalWeight += item.quantity * ing.weightPerUnit;
+              } else {
+                totalWeight += item.quantity; 
+                totalMatCost += (item.quantity / 1000) * ing.price;
+              }
+            }
+          }
+        });
+      }
+
+      const laborCost = (recipe.prepTimeMinutes / 60) * settings.hourlyRate;
+      const wasteCost = totalMatCost * (settings.wastePercentage / 100);
+      const productionCost = totalMatCost + laborCost + wasteCost;
+      
+      return { 
+        costPerKg: totalWeight > 0 ? (productionCost / (totalWeight / 1000)) : 0, 
+        totalWeight, 
+        materialCost: totalMatCost, 
+        laborCost, 
+        wasteCost, 
+        totalCost: productionCost 
+      };
+    };
+
+    // --- COMPOSANTS UI (IOS STYLE) ---
+
+    // 1. Custom Alert Modal (Remplacement de window.confirm)
+    const IOSAlert = ({ isOpen, title, message, onConfirm, onCancel }) => {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" style={{zIndex: 9999}}>
+          <div className="bg-white/90 backdrop-blur-xl w-[270px] rounded-2xl text-center shadow-xl transform transition-all animate-scale-in">
+            <div className="p-5">
+              <h3 className="font-bold text-[17px] mb-1 text-black">{title}</h3>
+              <p className="text-[13px] text-black leading-snug">{message}</p>
+            </div>
+            <div className="flex border-t border-gray-300/50 text-[17px]">
+              <button 
+                onClick={onCancel} 
+                className="flex-1 py-3 text-[#007aff] font-normal border-r border-gray-300/50 active:bg-gray-200/50 rounded-bl-2xl outline-none"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={onConfirm} 
+                className="flex-1 py-3 text-[#ff3b30] font-bold active:bg-gray-200/50 rounded-br-2xl outline-none"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+    
+    const IOSHeader = ({ title, rightAction, subtitle, leftAction }) => (
+      <div className="sticky top-0 z-20 bg-ios-bg/90 backdrop-blur-xl border-b border-gray-300/50 pt-safe px-4 pb-2">
+        <div className="flex justify-between items-center h-11">
+           <div className="min-w-[40px] flex items-center">{leftAction || <div className="w-8"></div>}</div>
+           {rightAction ? rightAction : <div className="w-8"></div>}
+        </div>
+        <div className="mt-1 pb-2">
+            <h1 className="text-[34px] font-bold tracking-tight text-black leading-tight">{title}</h1>
+            {subtitle && <div className="text-ios-subtext font-medium text-sm mt-0.5">{subtitle}</div>}
+        </div>
+      </div>
+    );
+
+    const IOSListGroup = ({ children, title }) => (
+      <div className="mb-6">
+        {title && <div className="px-4 py-2 text-[13px] uppercase text-ios-subtext font-semibold">{title}</div>}
+        <div className="bg-white rounded-xl overflow-hidden shadow-sm mx-4">
+           {children}
+        </div>
+      </div>
+    );
+
+    // V3.20 : SwipeRow avec CSS Grid pour éviter les problèmes de hauteur
+    const SwipeRow = ({ children, onDelete, enabled = true }) => {
+      const [translateX, setTranslateX] = useState(0);
+      const startX = useRef(null);
+      
+      const handleTouchStart = (e) => {
+        if (!enabled) return;
+        startX.current = e.touches[0].clientX;
+      };
+
+      const handleTouchMove = (e) => {
+        if (!enabled || startX.current === null) return;
+        const currentX = e.touches[0].clientX;
+        const diff = currentX - startX.current;
+        
+        if (diff < 0) {
+           setTranslateX(Math.max(diff, -100));
+        } else if (translateX < 0) {
+           setTranslateX(Math.min(diff - 80, 0));
+        }
+      };
+
+      const handleTouchEnd = () => {
+        if (!enabled) return;
+        if (translateX < -40) {
+          setTranslateX(-80);
+        } else {
+          setTranslateX(0);
+        }
+        startX.current = null;
+      };
+
+      const handleContentClick = (e) => {
+         if (translateX < 0) {
+            e.stopPropagation();
+            setTranslateX(0);
+         }
+      };
+
+      return (
+         <div className="grid grid-cols-1 overflow-hidden border-b border-gray-100 last:border-0 select-none">
+             {/* Arrière-plan (Bouton Supprimer) */}
+             <div className="row-start-1 col-start-1 bg-ios-red flex items-center justify-end pr-6">
+                 <button 
+                    type="button"
+                    className="flex items-center justify-center text-white outline-none"
+                    onClick={(e) => { 
+                       e.stopPropagation(); 
+                       if(onDelete) onDelete(); 
+                       setTranslateX(0); 
+                    }}
+                 >
+                    <Trash2 size={24} />
+                 </button>
+             </div>
+             
+             {/* Premier plan (Contenu) */}
+             <div 
+                className="row-start-1 col-start-1 bg-white z-10 transition-transform duration-200 ease-out"
+                style={{ transform: `translateX(${translateX}px)` }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onClickCapture={handleContentClick}
+             >
+                {children}
+             </div>
+         </div>
+      );
+    };
+
+    const IOSListItem = ({ children, onClick, icon: Icon, label, value, isLast = false, destructive = false }) => (
+      <div onClick={onClick} className={`pl-4 pr-4 py-3 flex items-center justify-between active:bg-gray-100 transition-colors cursor-pointer relative ${!isLast ? 'border-b border-gray-100' : ''}`}>
+         <div className="flex items-center gap-3 overflow-hidden w-full">
+            {Icon && <div className="text-ios-blue"><Icon size={22} /></div>}
+            <div className={`text-[17px] truncate w-full ${destructive ? 'text-ios-red' : 'text-black'}`}>{label || children}</div>
+         </div>
+         {(value || onClick) && (
+             <div className="flex items-center gap-2 text-ios-subtext text-[17px] pl-2 shrink-0">
+                {value}
+                {onClick && <ChevronRight size={20} className="opacity-30" />}
+             </div>
+         )}
+      </div>
+    );
+
+    const IOSInput = ({ value, onChange, placeholder, type="text", className="", ...props }) => (
+      <input 
+        type={type} 
+        value={value} 
+        onChange={onChange} 
+        placeholder={placeholder} 
+        className={`bg-transparent text-[17px] text-black placeholder-gray-400 outline-none ${className}`} 
+        {...props}
+      />
+    );
+
+    // --- MODULES DE L'APP ---
+
+    const PackagingManager = ({ title, items, setItems }) => {
+      const [isAdding, setIsAdding] = useState(false);
+      const [newItem, setNewItem] = useState({ name: '', price: '' });
+      
+      const handleSave = () => {
+         if (newItem.name) {
+            setItems([...items, { id: generateId(), name: newItem.name, price: parseFloat(newItem.price) || 0 }]);
+            setNewItem({ name: '', price: '' }); setIsAdding(false);
+         }
+      };
+      
+      const sortedItems = [...items].sort((a,b) => a.name.localeCompare(b.name));
+
+      return (
+        <IOSListGroup title={title}>
+           {sortedItems.map((item) => (
+              <IOSListItem key={item.id} isLast={false}>
+                 <div className="flex w-full items-center gap-3">
+                    <span className="flex-1 truncate">{item.name}</span>
+                    <div className="w-20 text-right font-bold text-ios-blue flex-shrink-0">
+                       {formatCurrency(item.price)}
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); setItems(items.filter(i => i.id !== item.id)); }}>
+                       <Trash2 size={18} className="text-ios-red opacity-50"/>
+                    </button>
+                 </div>
+              </IOSListItem>
+           ))}
+           {isAdding ? (
+              <div className="p-3 bg-gray-50 flex gap-2 items-center border-t border-gray-100">
+                 <input className="flex-1 bg-white p-2 rounded border" placeholder="Nom" value={newItem.name} onChange={e=>setNewItem({...newItem, name: e.target.value})}/>
+                 <input className="w-20 bg-white p-2 rounded border" type="number" placeholder="€" value={newItem.price} onChange={e=>setNewItem({...newItem, price: e.target.value})}/>
+                 <button onClick={handleSave} className="text-ios-blue font-bold px-2">OK</button>
+              </div>
+           ) : (
+              <div onClick={() => setIsAdding(true)} className="p-3 text-ios-blue flex items-center gap-2 cursor-pointer active:bg-gray-50 border-t border-gray-100">
+                 <Plus size={20}/> Ajouter
+              </div>
+           )}
+        </IOSListGroup>
+      );
+    };
+
+    // --- VUE DETAIL (Lecture seule) ---
+    const RecipeDetailView = ({ recipe, ingredients, recipes, settings, containers, labels, decorations, foils, onEdit, onBack }) => {
+       const metrics = useMemo(() => {
+         const rawMetrics = calculateRecipeMetrics(recipe.id, recipes, ingredients, settings);
+         
+         const foil = foils.find(f=>f.id===recipe.foilId);
+         const foilCost = (foil?.price||0)*recipe.yieldCount;
+         const packUnit = (containers.find(c=>c.id===recipe.containerId)?.price||0) + (labels.find(l=>l.id===recipe.labelId)?.price||0) + (decorations.find(d=>d.id===recipe.decorationId)?.price||0);
+         const packTotal = foilCost + (packUnit*(recipe.unitCount||0)) + (recipe.extraCost||0);
+         
+         const total = rawMetrics.materialCost + rawMetrics.laborCost + rawMetrics.wasteCost + packTotal;
+         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, pack: packTotal };
+      }, [recipe, recipes, ingredients, settings, containers, labels, decorations, foils]);
+
+      const sellingPrice = metrics.total / (1-(settings.defaultMargin/100));
+
+      return (
+         <div className="bg-ios-bg fixed inset-0 z-40 overflow-auto animate-fade-in pb-safe">
+            <IOSHeader 
+               title={recipe.name} 
+               subtitle={recipe.category}
+               leftAction={<button onClick={onBack} className="text-ios-blue flex items-center font-medium"><ChevronLeft size={24}/> Retour</button>}
+               rightAction={<button onClick={onEdit} className="text-ios-blue p-2 bg-blue-100 rounded-full"><Settings size={22} /></button>}
+            />
+            
+            <div className="p-4 space-y-6">
+               <div className="flex items-center justify-between px-4 text-gray-500 text-sm">
+                   <span>Temps prép: <span className="text-black font-medium">{recipe.prepTimeMinutes} min</span></span>
+                   <span>Rendement: <span className="text-black font-medium">{recipe.yieldCount} pcs</span></span>
+               </div>
+
+               <div>
+                 <div className="px-4 text-[13px] uppercase text-ios-subtext font-semibold mb-2">Ingrédients</div>
+                 <IOSListGroup>
+                    {recipe.ingredients.length === 0 && <div className="p-4 text-center text-gray-400 italic">Vide</div>}
+                    {recipe.ingredients.map((item, idx) => {
+                      const isRec = !!item.recipeId;
+                      const ref = isRec ? recipes.find(r=>r.id===item.recipeId) : ingredients.find(i=>i.id===item.ingredientId);
+                      return (
+                         <div key={idx} className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-0">
+                            <div>
+                               <div className="font-medium text-[17px]">{ref?.name || '???'}</div>
+                               {isRec && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded">Sous-recette</span>}
+                            </div>
+                            <div className="text-gray-500 font-medium">
+                               {item.quantity} {!isRec && ref?.unit==='pce'?'pce':'g'}
+                            </div>
+                         </div>
+                      )
+                    })}
+                 </IOSListGroup>
+               </div>
+
+               <div>
+                  <div className="px-4 text-[13px] uppercase text-ios-subtext font-semibold mb-2">Préparation</div>
+                  <div className="mx-4 bg-white rounded-xl p-4 text-[17px] text-black leading-relaxed whitespace-pre-wrap shadow-sm">
+                     {recipe.instructions ? recipe.instructions : <span className="text-gray-400 italic">Aucune étape renseignée.</span>}
+                  </div>
+               </div>
+
+               <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl mb-24">
+                 <div className="text-center mb-4 text-white/50 text-xs uppercase font-bold">Analyse Financière</div>
+                 <div className="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
+                    <div className="text-3xl font-bold text-white">{formatCurrency(sellingPrice)}</div>
+                    <div className="text-right text-xs">Prix Vente<br/>Conseillé</div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                     <div><div className="text-white/50 text-xs">Matière</div><div>{formatCurrency(metrics.mat)}</div></div>
+                     <div><div className="text-white/50 text-xs">Emballage</div><div>{formatCurrency(metrics.pack)}</div></div>
+                     <div><div className="text-white/50 text-xs">Marge ({settings.defaultMargin}%)</div><div className="text-green-400">{formatCurrency(sellingPrice - metrics.total)}</div></div>
+                     <div><div className="text-white/50 text-xs">Prix / Pièce</div><div>{formatCurrency(recipe.yieldCount ? sellingPrice/recipe.yieldCount : 0)}</div></div>
+                 </div>
+              </div>
+            </div>
+         </div>
+      );
+    }
+
+    // --- VUE EDITION INGREDIENT (Nouveau V3.23) ---
+    const IngredientEditView = ({ ingredient, categories, onSave, onCancel }) => {
+       const [form, setForm] = useState(ingredient);
+       
+       return (
+         <div className="bg-ios-bg fixed inset-0 z-50 overflow-auto animate-slide-up pb-safe">
+            <div className="sticky top-0 bg-white/90 backdrop-blur-md border-b z-50 px-4 py-3 flex justify-between items-center pt-safe">
+              <button onClick={onCancel} className="text-ios-blue text-[17px]">Annuler</button>
+              <span className="font-semibold text-[17px]">{form.id === 'new' ? 'Nouvel ingrédient' : 'Édition'}</span>
+              <button onClick={() => onSave({...form, price: parseFloat(form.price) || 0})} className="text-ios-blue font-bold text-[17px]">OK</button>
+            </div>
+            
+            <div className="p-4 space-y-6 mt-4">
+               <IOSListGroup>
+                  <div className="px-4 py-3 border-b border-gray-100">
+                     <IOSInput placeholder="Nom de l'ingrédient" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-bold text-lg w-full"/>
+                  </div>
+                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                     <span>Prix</span>
+                     <div className="flex items-center gap-2">
+                        <IOSInput 
+                            type="number" 
+                            className="text-right w-24" 
+                            placeholder="Ex: 10"
+                            value={form.price} 
+                            onChange={e=>setForm({...form, price: e.target.value})} // Permet le vide pour placeholder
+                        />
+                        <span className="text-gray-500">€</span>
+                     </div>
+                  </div>
+                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                     <span>Unité</span>
+                     <select className="bg-transparent text-ios-blue outline-none text-right" value={form.unit} onChange={e=>setForm({...form, unit: e.target.value})}>
+                        <option value="kg">Kilogramme (kg)</option>
+                        <option value="l">Litre (l)</option>
+                        <option value="pce">Pièce (pce)</option>
+                     </select>
+                  </div>
+                  <div className="px-4 py-3 flex justify-between items-center">
+                     <span>Catégorie</span>
+                     <select className="bg-transparent text-ios-blue outline-none text-right" value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>
+                        {[...categories].sort((a,b) => a.localeCompare(b)).map(c=><option key={c} value={c}>{c}</option>)}
+                        <option value="Autre">Autre</option>
+                     </select>
+                  </div>
+               </IOSListGroup>
+            </div>
+         </div>
+       );
+    };
+
+    // --- VUE EDITION RECETTE (Modal) ---
+    const RecipeEditView = ({ recipe, ingredients, recipes, categories, containers, labels, decorations, foils, settings, onSave, onCancel, onDelete }) => {
+      const [form, setForm] = useState(recipe);
+      const [addMode, setAddMode] = useState(null);
+      const [searchQuery, setSearchQuery] = useState('');
+
+      const metrics = useMemo(() => {
+         const tempAllRecipes = recipes.map(r => r.id === form.id ? form : r);
+         if (form.id === 'new') tempAllRecipes.push(form);
+
+         const rawMetrics = calculateRecipeMetrics(form.id === 'new' ? form.id : form.id, tempAllRecipes.length > 0 ? tempAllRecipes : [form], ingredients, settings);
+         
+         const foil = foils.find(f=>f.id===form.foilId);
+         const foilCost = (foil?.price||0)*form.yieldCount;
+         const packUnit = (containers.find(c=>c.id===form.containerId)?.price||0) + (labels.find(l=>l.id===form.labelId)?.price||0) + (decorations.find(d=>d.id===form.decorationId)?.price||0);
+         const packTotal = foilCost + (packUnit*(form.unitCount||0)) + (form.extraCost||0);
+         
+         const total = rawMetrics.materialCost + rawMetrics.laborCost + rawMetrics.wasteCost + packTotal;
+         
+         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, pack: packTotal };
+      }, [form, recipes, ingredients, settings, containers, labels, decorations, foils]);
+
+      const sellingPrice = metrics.total / (1-(settings.defaultMargin/100));
+
+      return (
+        <div className="bg-ios-bg fixed inset-0 z-50 overflow-auto animate-slide-up pb-safe">
+           <div className="sticky top-0 bg-white/90 backdrop-blur-md border-b z-50 px-4 py-3 flex justify-between items-center pt-safe">
+              <button onClick={onCancel} className="text-ios-blue text-[17px]">Annuler</button>
+              <span className="font-semibold text-[17px]">{form.id==='new'?'Nouvelle':'Édition'}</span>
+              <button onClick={() => onSave(form)} className="text-ios-blue font-bold text-[17px]">OK</button>
+           </div>
+           
+           <div className="p-4 space-y-6">
+              <IOSListGroup>
+                 <div className="px-4 py-3 border-b border-gray-100"><IOSInput placeholder="Nom de la recette" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-bold text-xl w-full"/></div>
+                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between">
+                    <span>Catégorie</span>
+                    <select className="bg-transparent text-ios-blue outline-none" value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>
+                       {[...categories].sort((a,b) => a.localeCompare(b)).map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                 </div>
+                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                    <span>Temps (min)</span>
+                    <IOSInput type="number" className="text-right w-20" value={form.prepTimeMinutes||''} onChange={e=>setForm({...form, prepTimeMinutes: parseFloat(e.target.value)})} />
+                 </div>
+                 <div className="px-4 py-3 flex justify-between items-center">
+                    <span>Rendement (pcs)</span>
+                    <IOSInput type="number" className="text-right w-20" value={form.yieldCount||''} onChange={e=>setForm({...form, yieldCount: parseFloat(e.target.value)})} />
+                 </div>
+              </IOSListGroup>
+
+              <div className="flex items-center justify-between px-4">
+                 <div className="text-[13px] uppercase text-ios-subtext font-semibold">Composition</div>
+                 <div className="flex gap-2">
+                    <button onClick={()=>{setAddMode('ing');setSearchQuery('');}} className="text-ios-blue text-sm font-bold bg-blue-100 px-3 py-1 rounded-full">+ Ingr.</button>
+                    <button onClick={()=>{setAddMode('rec');setSearchQuery('');}} className="text-ios-gold text-sm font-bold bg-yellow-100 px-3 py-1 rounded-full text-yellow-700">+ Recette</button>
+                 </div>
+              </div>
+
+              <IOSListGroup>
+                 {form.ingredients.length === 0 && <div className="p-4 text-center text-gray-400 italic">Aucun ingrédient</div>}
+                 {form.ingredients.map((item, idx) => {
+                    const isRec = !!item.recipeId;
+                    const ref = isRec ? recipes.find(r=>r.id===item.recipeId) : ingredients.find(i=>i.id===item.ingredientId);
+                    return (
+                       <div key={idx} className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                          <div>
+                             <div className="font-medium text-sm">{ref?.name || '???'}</div>
+                             {isRec && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded">Sous-recette</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <IOSInput type="number" className="text-right w-16 bg-gray-100 rounded px-1" value={item.quantity||''} onChange={e=>{const n=[...form.ingredients];n[idx].quantity=parseFloat(e.target.value);setForm({...form,ingredients:n})}} />
+                             <span className="text-xs text-gray-500 w-6">{!isRec && ref?.unit==='pce'?'pce':'g'}</span>
+                             <button onClick={()=>setForm({...form, ingredients: form.ingredients.filter((_,i)=>i!==idx)})}><Trash2 size={16} className="text-red-300"/></button>
+                          </div>
+                       </div>
+                    )
+                 })}
+              </IOSListGroup>
+
+              {addMode && (
+                 <div className="fixed inset-0 z-[60] bg-ios-bg flex flex-col animate-slide-up">
+                    <div className="bg-white/90 backdrop-blur border-b pt-safe px-4 py-3 flex justify-between items-center shrink-0 z-20">
+                       <h3 className="font-bold text-lg">Ajouter {addMode==='ing'?'Ingrédient':'Recette'}</h3>
+                       <button onClick={()=>setAddMode(null)} className="text-ios-blue font-bold text-[17px]">Fermer</button>
+                    </div>
+                    <div className="px-4 py-3 bg-white border-b shrink-0 z-10">
+                       <div className="bg-gray-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                          <Search size={18} className="text-gray-500" />
+                          <input 
+                            className="bg-transparent outline-none w-full text-[17px]" 
+                            placeholder="Rechercher..." 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                          />
+                       </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 pb-safe bg-ios-bg">
+                       <div className="space-y-2">
+                          {(addMode==='ing' 
+                            ? [...ingredients] 
+                            : [...recipes].filter(r=>r.id!==form.id)
+                           )
+                           .filter(x => x.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                           .sort((a,b)=>a.name.localeCompare(b.name))
+                           .map(x => (
+                             <div key={x.id} onClick={()=>{setForm({...form, ingredients: [...form.ingredients, addMode==='ing'?{ingredientId:x.id,quantity:0}:{recipeId:x.id,quantity:0}]});setAddMode(null)}} className="p-4 bg-white rounded-xl shadow-sm font-medium active:bg-blue-50 cursor-pointer border border-gray-100">
+                                {x.name}
+                             </div>
+                          ))}
+                          {(addMode==='ing' ? ingredients : recipes.filter(r=>r.id!==form.id)).filter(x => x.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                              <div className="text-center text-gray-400 py-10 italic">Aucun résultat</div>
+                           )}
+                       </div>
+                    </div>
+                 </div>
+              )}
+
+              <IOSListGroup title="Préparation / Étapes">
+                 <textarea 
+                    className="w-full h-40 p-4 bg-white text-[17px] outline-none resize-none leading-relaxed"
+                    placeholder="Écrivez les étapes de la recette ici..."
+                    value={form.instructions || ''}
+                    onChange={e => setForm({...form, instructions: e.target.value})}
+                 />
+              </IOSListGroup>
+
+              <IOSListGroup title="Conditionnement">
+                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between">
+                    <span className="text-sm">Papillote</span>
+                    <select className="bg-transparent text-ios-blue outline-none w-32 text-right text-sm" value={form.foilId||''} onChange={e=>setForm({...form, foilId: e.target.value})}><option value="">Aucune</option>{foils.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select>
+                 </div>
+                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                    <span className="text-sm">Nb Boîtes</span>
+                    <IOSInput type="number" placeholder="ex: 10" className="text-right w-24" value={form.unitCount||''} onChange={e=>setForm({...form, unitCount: parseFloat(e.target.value)})} />
+                 </div>
+                 {['containerId','labelId','decorationId'].map(field => {
+                     const list = field.startsWith('c')?containers:(field.startsWith('l')?labels:decorations);
+                     const lab = field.startsWith('c')?'Contenant':(field.startsWith('l')?'Étiquette':'Déco');
+                     return (
+                        <div key={field} className="px-4 py-3 border-b border-gray-100 flex justify-between">
+                           <span className="text-sm text-gray-600">{lab}</span>
+                           <select className="bg-transparent text-ios-blue outline-none w-32 text-right text-sm" value={form[field]||''} onChange={e=>setForm({...form, [field]: e.target.value})}><option value="">-</option>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
+                        </div>
+                     )
+                 })}
+                 <div className="px-4 py-3 flex justify-between items-center">
+                    <span className="text-sm">Extra (€)</span>
+                    <IOSInput type="number" placeholder="ex: 0.50" className="text-right w-24" value={form.extraCost||''} onChange={e=>setForm({...form, extraCost: parseFloat(e.target.value)})} />
+                 </div>
+              </IOSListGroup>
+
+              <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl mb-24">
+                 <div className="text-center mb-4 text-white/50 text-xs uppercase font-bold">Analyse Financière</div>
+                 <div className="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
+                    <div className="text-3xl font-bold text-white">{formatCurrency(sellingPrice)}</div>
+                    <div className="text-right text-xs">Prix Vente<br/>Conseillé</div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                     <div><div className="text-white/50 text-xs">Matière</div><div>{formatCurrency(metrics.mat)}</div></div>
+                     <div><div className="text-white/50 text-xs">Emballage</div><div>{formatCurrency(metrics.pack)}</div></div>
+                     <div><div className="text-white/50 text-xs">Marge ({settings.defaultMargin}%)</div><div className="text-green-400">{formatCurrency(sellingPrice - metrics.total)}</div></div>
+                     <div><div className="text-white/50 text-xs">Prix / Pièce</div><div>{formatCurrency(form.yieldCount ? sellingPrice/form.yieldCount : 0)}</div></div>
+                 </div>
+              </div>
+
+              {onDelete && form.id!=='new' && (
+                 <button 
+                    type="button" 
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    className="w-full mx-4 mb-8 bg-ios-red text-white font-bold py-3 rounded-xl text-center shadow cursor-pointer active:scale-[0.98] transition-transform block"
+                 >
+                    Supprimer la recette
+                 </button>
+              )}
+           </div>
+        </div>
+      );
+    };
+
+    // 3. Application Principale
+    const App = () => {
+      const [view, setView] = useState('dashboard');
+      const [ingredients, setIngredients] = useState([{id:'1',name:'Chocolat Noir',price:12.50,unit:'kg',category:'Chocolat'}]);
+      const [recipes, setRecipes] = useState([]);
+      const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+      const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+      const [containers, setContainers] = useState([]);
+      const [labels, setLabels] = useState([]);
+      const [decorations, setDecorations] = useState([]);
+      const [foils, setFoils] = useState([]);
+      
+      // STATES DE NAVIGATION
+      const [viewingId, setViewingId] = useState(null); // Mode Lecture Recette
+      const [editingId, setEditingId] = useState(null); // Mode Edition Recette
+      const [editingIngredient, setEditingIngredient] = useState(null); // Mode Edition Ingrédient (V3.23)
+
+      // STATE RECHERCHE DASHBOARD
+      const [dashboardSearch, setDashboardSearch] = useState('');
+
+      // STATE ALERTE (V3.20)
+      const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
+      const requestConfirm = (title, message, action) => {
+         setAlertConfig({
+            isOpen: true, 
+            title, 
+            message, 
+            onConfirm: () => { action(); setAlertConfig(prev => ({...prev, isOpen: false})); }
+         });
+      };
+
+      // Chargement Auto
+      useEffect(() => {
+         const d = localStorage.getItem('choco_app_ios_v2');
+         if(d) {
+            try {
+                const p = JSON.parse(d);
+                if(p.ingredients) setIngredients(p.ingredients);
+                if(p.recipes) setRecipes(p.recipes);
+                if(p.settings) setSettings(p.settings);
+                if(p.categories) setCategories(p.categories);
+                if(p.containers) setContainers(p.containers);
+                if(p.labels) setLabels(p.labels);
+                if(p.decorations) setDecorations(p.decorations);
+                if(p.foils) setFoils(p.foils);
+            } catch(e) { console.error(e); }
+         }
+      }, []);
+
+      // Sauvegarde Auto
+      useEffect(() => {
+         const data = { ingredients, recipes, settings, categories, containers, labels, decorations, foils };
+         localStorage.setItem('choco_app_ios_v2', JSON.stringify(data));
+      }, [ingredients, recipes, settings, categories, containers, labels, decorations, foils]);
+
+      const handleImport = (e) => {
+          const file = e.target.files && e.target.files[0];
+          if(!file) return;
+          const r = new FileReader();
+          r.onload = (ev) => {
+             try {
+                const p = JSON.parse(ev.target.result);
+                if(p.ingredients) setIngredients(p.ingredients);
+                if(p.recipes) setRecipes(p.recipes);
+                if(p.settings) setSettings(p.settings);
+                if(p.categories) setCategories(p.categories);
+                if(p.containers) setContainers(p.containers);
+                if(p.labels) setLabels(p.labels);
+                if(p.decorations) setDecorations(p.decorations);
+                if(p.foils) setFoils(p.foils);
+                alert("Importation réussie !");
+             } catch(err) { alert("Erreur fichier invalide"); }
+          }
+          r.readAsText(file);
+          e.target.value = '';
+      };
+
+      const handleExport = () => {
+          const data = localStorage.getItem('choco_app_ios_v2');
+          const blob = new Blob([data], {type: 'application/json'});
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `backup_choco_${new Date().toISOString().slice(0,10)}.json`;
+          a.click();
+      }
+
+      const renderContent = () => {
+         if (view === 'dashboard') {
+            return (
+               <div className="pb-24">
+                  <IOSHeader title={`Bonjour ${settings.chefName}`} subtitle={APP_VERSION} />
+                  
+                  {/* SEARCH BAR DASHBOARD - Modified margin */}
+                  <div className="px-4 mt-4 mb-4">
+                     <div className="bg-gray-200/50 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                        <Search size={18} className="text-gray-500" />
+                        <input 
+                           className="bg-transparent outline-none w-full text-[17px] placeholder-gray-500" 
+                           placeholder="Rechercher une recette..." 
+                           value={dashboardSearch}
+                           onChange={(e) => setDashboardSearch(e.target.value)}
+                        />
+                        {dashboardSearch && (
+                           <button onClick={()=>setDashboardSearch('')}><X size={18} className="text-gray-500"/></button>
+                        )}
+                     </div>
+                  </div>
+
+                  {dashboardSearch.length > 0 ? (
+                     <div className="mt-4">
+                        <IOSListGroup title="Résultats">
+                           {recipes
+                              .filter(r => r.name.toLowerCase().includes(dashboardSearch.toLowerCase()))
+                              .sort((a,b) => a.name.localeCompare(b.name))
+                              .map((r, i) => (
+                              <IOSListItem 
+                                 key={r.id} 
+                                 label={r.name} 
+                                 value={r.category}
+                                 isLast={false} 
+                                 onClick={() => {
+                                    setView('recipes');
+                                    setViewingId(r.id);
+                                    setDashboardSearch('');
+                                 }}
+                              />
+                           ))}
+                           {recipes.filter(r => r.name.toLowerCase().includes(dashboardSearch.toLowerCase())).length === 0 && (
+                              <div className="p-4 text-center text-gray-500">Aucune recette trouvée</div>
+                           )}
+                        </IOSListGroup>
+                     </div>
+                  ) : (
+                     <div className="animate-fade-in">
+                        <IOSListGroup title="Raccourcis">
+                           <IOSListItem icon={Plus} label="Nouvelle Recette" onClick={()=>{setView('recipes');setEditingId('new')}} />
+                           <IOSListItem icon={Settings} label="Réglages" onClick={()=>setView('settings')} isLast />
+                        </IOSListGroup>
+                     </div>
+                  )}
+               </div>
+            )
+         }
+         if (view === 'recipes') {
+             // TRI ALPHABETIQUE
+             const sortedRecipes = [...recipes].sort((a,b) => a.name.localeCompare(b.name));
+             return (
+                 <div className="pb-24">
+                    <IOSHeader title="Recettes" rightAction={<button onClick={()=>setEditingId('new')} className="text-ios-blue"><Plus size={24}/></button>} />
+                    <IOSListGroup>
+                       {sortedRecipes.map((r, i) => {
+                          const met = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
+                          const sell = met.totalCost / (1-(settings.defaultMargin/100));
+                          const unitPrice = r.yieldCount > 0 ? sell / r.yieldCount : 0;
+
+                          return (
+                             <SwipeRow key={r.id} onDelete={()=>{
+                                requestConfirm(
+                                   "Supprimer la recette ?",
+                                   `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`,
+                                   () => setRecipes(recipes.filter(x => x.id !== r.id))
+                                );
+                             }}>
+                                <div className="pl-4 pr-4 py-3 flex w-full items-center gap-2 active:bg-gray-100 transition-colors" onClick={()=>setViewingId(r.id)}>
+                                   <div className="flex-1 min-w-0">
+                                      <div className="font-semibold truncate text-[17px]">{r.name}</div>
+                                      <div className="text-[14px] text-gray-500">{r.category}</div>
+                                   </div>
+                                   <div className="flex flex-col items-end min-w-[100px] border-l border-gray-100 pl-2 ml-2">
+                                      <div className="text-ios-blue font-bold text-[15px]">Vente {formatCurrency(sell)}</div>
+                                      <div className="text-[11px] text-green-600 font-bold">Unit. {formatCurrency(unitPrice)}</div>
+                                      <div className="text-[11px] text-yellow-600 font-bold">Mat. {formatCurrency(met.materialCost)}</div>
+                                   </div>
+                                   <ChevronRight size={20} className="text-ios-subtext opacity-30" />
+                                </div>
+                             </SwipeRow>
+                          )
+                       })}
+                       {recipes.length === 0 && <div className="p-4 text-center text-gray-400">Aucune recette</div>}
+                    </IOSListGroup>
+                    
+                    {/* MODAL LECTURE SEULE */}
+                    {viewingId && !editingId && (
+                       <RecipeDetailView 
+                          recipe={recipes.find(r=>r.id===viewingId)}
+                          ingredients={ingredients} recipes={recipes} settings={settings}
+                          containers={containers} labels={labels} decorations={decorations} foils={foils}
+                          onBack={()=>setViewingId(null)}
+                          onEdit={()=>setEditingId(viewingId)}
+                       />
+                    )}
+
+                    {/* MODAL EDITION RECETTE */}
+                    {editingId && (
+                       <RecipeEditView 
+                          recipe={editingId==='new' ? {id:'new',name:'',category:'Confiserie',ingredients:[],prepTimeMinutes:0,yieldCount:1,extraCost:0,foilId:'',unitCount:0,containerId:'',labelId:'',decorationId:''} : recipes.find(r=>r.id===editingId)}
+                          ingredients={ingredients} recipes={recipes} categories={categories} settings={settings}
+                          containers={containers} labels={labels} decorations={decorations} foils={foils}
+                          onCancel={()=>setEditingId(null)}
+                          onSave={(r)=>{
+                             if(r.id==='new') setRecipes([...recipes, {...r, id:generateId()}]);
+                             else setRecipes(recipes.map(x=>x.id===r.id?r:x));
+                             setEditingId(null);
+                             // Si c'était pas new, on reste sur la vue détail
+                             if(r.id!=='new') setViewingId(r.id);
+                          }}
+                          onDelete={editingId!=='new' ? () => {
+                             requestConfirm(
+                                "Supprimer la recette ?",
+                                "Cette action est irréversible.",
+                                () => {
+                                   setRecipes(recipes.filter(r=>r.id!==editingId));
+                                   setEditingId(null);
+                                   setViewingId(null);
+                                }
+                             );
+                          } : undefined}
+                       />
+                    )}
+                 </div>
+             )
+         }
+         if (view === 'ingredients') {
+             const sortedIngredients = [...ingredients].sort((a,b) => a.name.localeCompare(b.name));
+             return (
+                <div className="pb-24">
+                   <IOSHeader title="Ingrédients" rightAction={<button onClick={()=>setEditingIngredient({id: 'new', name: '', price: '', unit: 'kg', category: 'Autre'})} className="text-ios-blue min-w-[44px] flex items-center justify-end"><Plus size={24}/></button>} />
+                   <IOSListGroup>
+                      {sortedIngredients.map((ing) => (
+                         <SwipeRow key={ing.id} onDelete={()=>{
+                             requestConfirm(
+                                "Supprimer l'ingrédient ?",
+                                `Voulez-vous supprimer "${ing.name}" ?`,
+                                () => setIngredients(ingredients.filter(x => x.id !== ing.id))
+                             );
+                         }}>
+                             <IOSListItem 
+                                label={ing.name}
+                                value={`${formatCurrency(ing.price)} / ${ing.unit}`}
+                                onClick={() => setEditingIngredient(ing)}
+                                isLast={false}
+                             />
+                         </SwipeRow>
+                      ))}
+                   </IOSListGroup>
+
+                   {/* MODAL EDITION INGREDIENT */}
+                   {editingIngredient && (
+                      <IngredientEditView
+                         ingredient={editingIngredient}
+                         categories={categories}
+                         onCancel={() => setEditingIngredient(null)}
+                         onSave={(ing) => {
+                            if (ing.id === 'new') {
+                               setIngredients([...ingredients, { ...ing, id: generateId() }]);
+                            } else {
+                               setIngredients(ingredients.map(x => x.id === ing.id ? ing : x));
+                            }
+                            setEditingIngredient(null);
+                         }}
+                      />
+                   )}
+                </div>
+             )
+         }
+         if (view === 'settings') {
+             return (
+                <div className="pb-24">
+                   <IOSHeader title="Réglages" />
+                   <IOSListGroup title="Général">
+                      <div className="px-4 py-3 flex justify-between border-b border-gray-100"><span>Nom Chef</span><IOSInput className="text-right" value={settings.chefName} onChange={e=>setSettings({...settings,chefName:e.target.value})} /></div>
+                      <div className="px-4 py-3 flex justify-between border-b border-gray-100"><span>Taux Horaire</span><IOSInput type="number" className="text-right" value={settings.hourlyRate} onChange={e=>setSettings({...settings,hourlyRate:parseFloat(e.target.value)})} /></div>
+                      <div className="px-4 py-3 flex justify-between"><span>Marge %</span><IOSInput type="number" className="text-right" value={settings.defaultMargin} onChange={e=>setSettings({...settings,defaultMargin:parseFloat(e.target.value)})} /></div>
+                   </IOSListGroup>
+                   <PackagingManager title="Contenants" items={containers} setItems={setContainers} />
+                   <PackagingManager title="Étiquettes" items={labels} setItems={setLabels} />
+                   <PackagingManager title="Décorations" items={decorations} setItems={setDecorations} />
+                   <PackagingManager title="Papillotes" items={foils} setItems={setFoils} />
+                   <IOSListGroup title="Données">
+                      <IOSListItem label="Exporter JSON" icon={Download} onClick={handleExport} />
+                      <div className="relative">
+                         <IOSListItem label="Importer JSON" icon={Upload} isLast />
+                         <input type="file" onChange={handleImport} accept=".json" className="absolute inset-0 w-full h-full opacity-0 z-50 cursor-pointer" />
+                      </div>
+                   </IOSListGroup>
+                   <div className="text-center p-6 text-ios-subtext text-xs">
+                      ChocoCost {APP_VERSION}
+                   </div>
+                </div>
+             )
+         }
+      }
+
+      const navItems = [
+         { id: 'dashboard', icon: LayoutDashboard, label: 'Accueil' },
+         { id: 'recipes', icon: ChefHat, label: 'Recettes' },
+         { id: 'ingredients', icon: List, label: 'Ingréd.' },
+         { id: 'settings', icon: Settings, label: 'Réglages' },
+      ];
+
+      return (
+         <div className="h-full flex flex-col">
+            <IOSAlert 
+               isOpen={alertConfig.isOpen} 
+               title={alertConfig.title} 
+               message={alertConfig.message} 
+               onConfirm={alertConfig.onConfirm} 
+               onCancel={() => setAlertConfig(prev => ({...prev, isOpen: false}))} 
+            />
+            <main className="flex-1 overflow-y-auto no-scrollbar bg-ios-bg">
+               {renderContent()}
+            </main>
+            <nav className="bg-white/90 backdrop-blur-xl border-t border-gray-300 pb-safe pt-2 flex justify-around z-40">
+               {navItems.map(item => (
+                  <button key={item.id} onClick={()=>setView(item.id)} className={`flex flex-col items-center w-16 ${view===item.id?'text-ios-blue':'text-gray-400'}`}>
+                     <item.icon size={26} strokeWidth={view===item.id?2.5:2} />
+                     <span className="text-[10px] font-medium mt-1">{item.label}</span>
+                  </button>
+               ))}
+            </nav>
+         </div>
+      );
+    };
+
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

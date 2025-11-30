@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ChocoCost V1.00</title>
+  <title>ChocoCost V1.01</title>
   
   <!-- 1. STYLE (Tailwind) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -73,7 +73,7 @@
     } from 'lucide-react';
 
     // --- VERSION ---
-    const APP_VERSION = "V1.00";
+    const APP_VERSION = "V1.01";
 
     // --- DATA & UTILITAIRES ---
     const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -732,7 +732,7 @@
       const renderContent = () => {
          if (view === 'dashboard') {
             return (
-               <div className="pb-24">
+               <div className="pb-32">
                   <IOSHeader title={`Bonjour ${settings.chefName}`} subtitle={APP_VERSION} />
                   
                   {/* SEARCH BAR DASHBOARD - Modified margin */}
@@ -790,7 +790,7 @@
              // TRI ALPHABETIQUE
              const sortedRecipes = [...recipes].sort((a,b) => a.name.localeCompare(b.name));
              return (
-                 <div className="pb-24">
+                 <div className="pb-32">
                     <IOSHeader title="Recettes" rightAction={<button onClick={()=>setEditingId('new')} className="text-ios-blue"><Plus size={24}/></button>} />
                     <IOSListGroup>
                        {sortedRecipes.map((r, i) => {
@@ -868,7 +868,7 @@
          if (view === 'ingredients') {
              const sortedIngredients = [...ingredients].sort((a,b) => a.name.localeCompare(b.name));
              return (
-                <div className="pb-24">
+                <div className="pb-32">
                    <IOSHeader title="Ingrédients" rightAction={<button onClick={()=>setEditingIngredient({id: 'new', name: '', price: '', unit: 'kg', category: 'Autre'})} className="text-ios-blue min-w-[44px] flex items-center justify-end"><Plus size={24}/></button>} />
                    <IOSListGroup>
                       {sortedIngredients.map((ing) => (
@@ -910,7 +910,7 @@
          }
          if (view === 'settings') {
              return (
-                <div className="pb-24">
+                <div className="pb-32">
                    <IOSHeader title="Réglages" />
                    <IOSListGroup title="Général">
                       <div className="px-4 py-3 flex justify-between border-b border-gray-100"><span>Nom Chef</span><IOSInput className="text-right" value={settings.chefName} onChange={e=>setSettings({...settings,chefName:e.target.value})} /></div>
@@ -944,7 +944,7 @@
       ];
 
       return (
-         <div className="h-full flex flex-col">
+         <div className="h-full relative">
             <IOSAlert 
                isOpen={alertConfig.isOpen} 
                title={alertConfig.title} 
@@ -952,10 +952,10 @@
                onConfirm={alertConfig.onConfirm} 
                onCancel={() => setAlertConfig(prev => ({...prev, isOpen: false}))} 
             />
-            <main className="flex-1 overflow-y-auto no-scrollbar bg-ios-bg">
+            <main className="absolute inset-0 overflow-y-auto no-scrollbar bg-ios-bg pb-24">
                {renderContent()}
             </main>
-            <nav className="bg-white/90 backdrop-blur-xl border-t border-gray-300 pb-safe pt-2 flex justify-around z-40">
+            <nav className="fixed bottom-0 w-full bg-[#f9f9f9]/90 backdrop-blur-xl border-t border-gray-300/50 pb-safe pt-2 flex justify-around z-50">
                {navItems.map(item => (
                   <button key={item.id} onClick={()=>setView(item.id)} className={`flex flex-col items-center w-16 ${view===item.id?'text-ios-blue':'text-gray-400'}`}>
                      <item.icon size={26} strokeWidth={view===item.id?2.5:2} />

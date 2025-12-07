@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ChocoCost V1.03</title>
+  <title>ChocoCost V1.04</title>
   
   <!-- 1. STYLE (Tailwind) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -69,11 +69,11 @@
     import { createRoot } from 'react-dom/client';
     import { 
       LayoutDashboard, ChefHat, Settings, Plus, Trash2, Download, Upload, 
-      ChevronRight, List, X, Search, ChevronLeft, Copy
+      ChevronRight, List, X, Search, ChevronLeft
     } from 'lucide-react';
 
     // --- VERSION ---
-    const APP_VERSION = "V1.03";
+    const APP_VERSION = "V1.04";
 
     // --- DATA & UTILITAIRES ---
     const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -170,7 +170,7 @@
     };
     
     const IOSHeader = ({ title, rightAction, subtitle, leftAction }) => (
-      <div className="sticky top-0 z-20 bg-ios-bg/90 backdrop-blur-xl border-b border-gray-300/50 pt-safe px-4 pb-2">
+      <div className="sticky top-0 z-20 bg-ios-bg/90 backdrop-blur-xl border-b border-gray-300/50 pt-safe px-4 pb-2 transition-all">
         <div className="flex justify-between items-center h-11">
            <div className="min-w-[40px] flex items-center">{leftAction || <div className="w-8"></div>}</div>
            {rightAction ? rightAction : <div className="w-8"></div>}
@@ -191,7 +191,6 @@
       </div>
     );
 
-    // V3.20 : SwipeRow avec CSS Grid pour éviter les problèmes de hauteur
     const SwipeRow = ({ children, onDelete, enabled = true }) => {
       const [translateX, setTranslateX] = useState(0);
       const startX = useRef(null);
@@ -436,7 +435,7 @@
                             className="text-right w-24" 
                             placeholder="Ex: 10"
                             value={form.price} 
-                            onChange={e=>setForm({...form, price: e.target.value})} // Permet le vide pour placeholder
+                            onChange={e=>setForm({...form, price: e.target.value})} 
                         />
                         <span className="text-gray-500">€</span>
                      </div>
@@ -685,6 +684,7 @@
       const [viewingId, setViewingId] = useState(null); // Mode Lecture Recette
       const [editingId, setEditingId] = useState(null); // Mode Edition Recette
       const [editingIngredient, setEditingIngredient] = useState(null); // Mode Edition Ingrédient (V3.23)
+      const [recipeTab, setRecipeTab] = useState('main'); // 'main' | 'sub' (Nouveau V1.04)
 
       // STATE RECHERCHE DASHBOARD
       const [dashboardSearch, setDashboardSearch] = useState('');
@@ -814,61 +814,78 @@
             )
          }
          if (view === 'recipes') {
-             // TRI ALPHABETIQUE
-             const sortedRecipes = [...recipes].sort((a,b) => a.name.localeCompare(b.name));
-             const subRecipes = sortedRecipes.filter(r => r.category === 'Sous-recette');
-             const mainRecipes = sortedRecipes.filter(r => r.category !== 'Sous-recette');
+             // FILTRAGE ET REGROUPEMENT (V1.04)
+             const filteredRecipes = recipes
+                 .filter(r => recipeTab === 'sub' ? r.category === 'Sous-recette' : r.category !== 'Sous-recette')
+                 .sort((a,b) => a.name.localeCompare(b.name));
 
-             const renderRecipeList = (list) => (
-                list.map((r) => {
-                  const met = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
-                  const sell = met.totalCost / (1-(settings.defaultMargin/100));
-                  const unitPrice = r.yieldCount > 0 ? sell / r.yieldCount : 0;
+             const groupedRecipes = filteredRecipes.reduce((acc, recipe) => {
+                 const cat = recipe.category || 'Autre';
+                 if (!acc[cat]) acc[cat] = [];
+                 acc[cat].push(recipe);
+                 return acc;
+             }, {});
 
-                  return (
-                     <SwipeRow key={r.id} onDelete={()=>{
-                        requestConfirm(
-                           "Supprimer la recette ?",
-                           `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`,
-                           () => setRecipes(recipes.filter(x => x.id !== r.id))
-                        );
-                     }}>
-                        <div className="pl-4 pr-4 py-3 flex w-full items-center gap-2 active:bg-gray-100 transition-colors" onClick={()=>setViewingId(r.id)}>
-                           <div className="flex-1 min-w-0">
-                              <div className="font-semibold truncate text-[17px]">{r.name}</div>
-                              <div className="text-[14px] text-gray-500">{r.category}</div>
-                           </div>
-                           <div className="flex flex-col items-end min-w-[120px] border-l border-gray-100 pl-2 ml-2 text-right">
-                              <div className="text-ios-blue font-bold text-[14px]">Vente {formatCurrency(sell)}</div>
-                              <div className="text-[11px] text-green-600 font-medium">Unit. {formatCurrency(unitPrice)}</div>
-                              <div className="text-[11px] text-gray-500 font-medium">{formatCurrency(met.costPerKg)} / kg</div>
-                              <div className="text-[11px] text-yellow-600 font-medium">Mat. {formatCurrency(met.materialCost)}</div>
-                           </div>
-                           <ChevronRight size={20} className="text-ios-subtext opacity-30" />
-                        </div>
-                     </SwipeRow>
-                  )
-               })
-             );
+             const sortedCategories = Object.keys(groupedRecipes).sort();
 
              return (
                  <div className="pb-32">
                     <IOSHeader title="Recettes" rightAction={<button onClick={()=>setEditingId('new')} className="text-ios-blue"><Plus size={24}/></button>} />
                     
-                    {mainRecipes.length > 0 && (
-                      <IOSListGroup title="Recettes Principales">
-                        {renderRecipeList(mainRecipes)}
-                      </IOSListGroup>
+                    {/* ONGLET SELECTEUR TYPE RECETTE (V1.04) */}
+                    <div className="px-4 pb-4">
+                       <div className="bg-[#e3e3e8] p-0.5 rounded-lg flex h-8 relative">
+                          <button 
+                             onClick={()=>setRecipeTab('main')}
+                             className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='main'?'bg-white shadow text-black':'text-gray-500'}`}
+                          >
+                             Recettes Principales
+                          </button>
+                          <button 
+                             onClick={()=>setRecipeTab('sub')}
+                             className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='sub'?'bg-white shadow text-black':'text-gray-500'}`}
+                          >
+                             Sous-recettes
+                          </button>
+                       </div>
+                    </div>
+
+                    {filteredRecipes.length === 0 ? (
+                       <div className="p-10 text-center text-gray-400">Aucune recette dans cette section</div>
+                    ) : (
+                       sortedCategories.map(cat => (
+                          <IOSListGroup key={cat} title={cat}>
+                             {groupedRecipes[cat].map(r => {
+                                const met = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
+                                const sell = met.totalCost / (1-(settings.defaultMargin/100));
+                                const unitPrice = r.yieldCount > 0 ? sell / r.yieldCount : 0;
+                                return (
+                                   <SwipeRow key={r.id} onDelete={()=>{
+                                      requestConfirm(
+                                         "Supprimer la recette ?",
+                                         `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`,
+                                         () => setRecipes(recipes.filter(x => x.id !== r.id))
+                                      );
+                                   }}>
+                                      <div className="pl-4 pr-4 py-3 flex w-full items-center gap-2 active:bg-gray-100 transition-colors" onClick={()=>setViewingId(r.id)}>
+                                         <div className="flex-1 min-w-0">
+                                            <div className="font-semibold truncate text-[17px]">{r.name}</div>
+                                            {/* La catégorie est déjà dans le titre du groupe, on l'enlève ici pour alléger */}
+                                         </div>
+                                         <div className="flex flex-col items-end min-w-[120px] border-l border-gray-100 pl-2 ml-2 text-right">
+                                            <div className="text-ios-blue font-bold text-[14px]">Vente {formatCurrency(sell)}</div>
+                                            <div className="text-[11px] text-green-600 font-medium">Unit. {formatCurrency(unitPrice)}</div>
+                                            <div className="text-[11px] text-gray-500 font-medium">{formatCurrency(met.costPerKg)} / kg</div>
+                                         </div>
+                                         <ChevronRight size={20} className="text-ios-subtext opacity-30" />
+                                      </div>
+                                   </SwipeRow>
+                                );
+                             })}
+                          </IOSListGroup>
+                       ))
                     )}
 
-                    {subRecipes.length > 0 && (
-                      <IOSListGroup title="Sous-recettes">
-                        {renderRecipeList(subRecipes)}
-                      </IOSListGroup>
-                    )}
-
-                    {recipes.length === 0 && <div className="p-4 text-center text-gray-400 mt-10">Aucune recette</div>}
-                    
                     {/* MODAL LECTURE SEULE */}
                     {viewingId && !editingId && (
                        <RecipeDetailView 

@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ChocoCost V1.01</title>
+  <title>ChocoCost V1.03</title>
   
   <!-- 1. STYLE (Tailwind) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -69,11 +69,11 @@
     import { createRoot } from 'react-dom/client';
     import { 
       LayoutDashboard, ChefHat, Settings, Plus, Trash2, Download, Upload, 
-      ChevronRight, List, X, Search, ChevronLeft 
+      ChevronRight, List, X, Search, ChevronLeft, Copy
     } from 'lucide-react';
 
     // --- VERSION ---
-    const APP_VERSION = "V1.01";
+    const APP_VERSION = "V1.03";
 
     // --- DATA & UTILITAIRES ---
     const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -89,7 +89,7 @@
       chefName: 'Chef Audrey' 
     };
     
-    const DEFAULT_CATEGORIES = ['Chocolat', 'Fruits Secs', 'Sucre', 'Crèmerie', 'Arômes', 'Confiserie', 'Pâte à tartiner'];
+    const DEFAULT_CATEGORIES = ['Chocolat', 'Sous-recette', 'Fruits Secs', 'Sucre', 'Crèmerie', 'Arômes', 'Confiserie', 'Pâte à tartiner'];
     
     // --- LOGIQUE DE CALCUL ---
     const calculateRecipeMetrics = (recipeId, allRecipes, allIngredients, settings, depth = 0) => {
@@ -161,7 +161,7 @@
                 onClick={onConfirm} 
                 className="flex-1 py-3 text-[#ff3b30] font-bold active:bg-gray-200/50 rounded-br-2xl outline-none"
               >
-                Supprimer
+                Confirmer
               </button>
             </div>
           </div>
@@ -344,7 +344,7 @@
          const packTotal = foilCost + (packUnit*(recipe.unitCount||0)) + (recipe.extraCost||0);
          
          const total = rawMetrics.materialCost + rawMetrics.laborCost + rawMetrics.wasteCost + packTotal;
-         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, pack: packTotal };
+         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, pack: packTotal, weight: rawMetrics.totalWeight, costPerKg: rawMetrics.costPerKg };
       }, [recipe, recipes, ingredients, settings, containers, labels, decorations, foils]);
 
       const sellingPrice = metrics.total / (1-(settings.defaultMargin/100));
@@ -402,7 +402,7 @@
                  <div className="grid grid-cols-2 gap-4 text-sm">
                      <div><div className="text-white/50 text-xs">Matière</div><div>{formatCurrency(metrics.mat)}</div></div>
                      <div><div className="text-white/50 text-xs">Emballage</div><div>{formatCurrency(metrics.pack)}</div></div>
-                     <div><div className="text-white/50 text-xs">Marge ({settings.defaultMargin}%)</div><div className="text-green-400">{formatCurrency(sellingPrice - metrics.total)}</div></div>
+                     <div><div className="text-white/50 text-xs">Prix / kg</div><div>{formatCurrency(metrics.costPerKg)}</div></div>
                      <div><div className="text-white/50 text-xs">Prix / Pièce</div><div>{formatCurrency(recipe.yieldCount ? sellingPrice/recipe.yieldCount : 0)}</div></div>
                  </div>
               </div>
@@ -463,10 +463,15 @@
     };
 
     // --- VUE EDITION RECETTE (Modal) ---
-    const RecipeEditView = ({ recipe, ingredients, recipes, categories, containers, labels, decorations, foils, settings, onSave, onCancel, onDelete }) => {
+    const RecipeEditView = ({ recipe, ingredients, recipes, categories, containers, labels, decorations, foils, settings, onSave, onCancel, onDelete, onDuplicate }) => {
       const [form, setForm] = useState(recipe);
       const [addMode, setAddMode] = useState(null);
       const [searchQuery, setSearchQuery] = useState('');
+
+      const isSubRecipe = form.category === 'Sous-recette';
+      const toggleSubRecipe = () => {
+         setForm(prev => ({ ...prev, category: prev.category === 'Sous-recette' ? 'Confiserie' : 'Sous-recette' }));
+      };
 
       const metrics = useMemo(() => {
          const tempAllRecipes = recipes.map(r => r.id === form.id ? form : r);
@@ -481,7 +486,7 @@
          
          const total = rawMetrics.materialCost + rawMetrics.laborCost + rawMetrics.wasteCost + packTotal;
          
-         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, pack: packTotal };
+         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, pack: packTotal, costPerKg: rawMetrics.costPerKg };
       }, [form, recipes, ingredients, settings, containers, labels, decorations, foils]);
 
       const sellingPrice = metrics.total / (1-(settings.defaultMargin/100));
@@ -497,12 +502,24 @@
            <div className="p-4 space-y-6">
               <IOSListGroup>
                  <div className="px-4 py-3 border-b border-gray-100"><IOSInput placeholder="Nom de la recette" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-bold text-xl w-full"/></div>
-                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between">
-                    <span>Catégorie</span>
-                    <select className="bg-transparent text-ios-blue outline-none" value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>
-                       {[...categories].sort((a,b) => a.localeCompare(b)).map(c=><option key={c} value={c}>{c}</option>)}
-                    </select>
+                 
+                 {/* SWITCH SOUS RECETTE */}
+                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center cursor-pointer" onClick={toggleSubRecipe}>
+                    <span className="text-[17px]">Est une sous-recette</span>
+                    <div className={`w-[51px] h-[31px] rounded-full p-[2px] transition-colors duration-200 ${isSubRecipe ? 'bg-[#34c759]' : 'bg-[#e9e9ea]'}`}>
+                        <div className={`bg-white w-[27px] h-[27px] rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.2)] transform transition-transform duration-200 ${isSubRecipe ? 'translate-x-[20px]' : 'translate-x-0'}`}/>
+                    </div>
                  </div>
+
+                 {!isSubRecipe && (
+                    <div className="px-4 py-3 border-b border-gray-100 flex justify-between">
+                        <span>Catégorie</span>
+                        <select className="bg-transparent text-ios-blue outline-none" value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>
+                        {[...categories].filter(c => c !== 'Sous-recette').sort((a,b) => a.localeCompare(b)).map(c=><option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                 )}
+
                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
                     <span>Temps (min)</span>
                     <IOSInput type="number" className="text-right w-20" value={form.prepTimeMinutes||''} onChange={e=>setForm({...form, prepTimeMinutes: parseFloat(e.target.value)})} />
@@ -614,7 +631,7 @@
                  </div>
               </IOSListGroup>
 
-              <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl mb-24">
+              <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl mb-6">
                  <div className="text-center mb-4 text-white/50 text-xs uppercase font-bold">Analyse Financière</div>
                  <div className="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
                     <div className="text-3xl font-bold text-white">{formatCurrency(sellingPrice)}</div>
@@ -623,19 +640,29 @@
                  <div className="grid grid-cols-2 gap-4 text-sm">
                      <div><div className="text-white/50 text-xs">Matière</div><div>{formatCurrency(metrics.mat)}</div></div>
                      <div><div className="text-white/50 text-xs">Emballage</div><div>{formatCurrency(metrics.pack)}</div></div>
-                     <div><div className="text-white/50 text-xs">Marge ({settings.defaultMargin}%)</div><div className="text-green-400">{formatCurrency(sellingPrice - metrics.total)}</div></div>
+                     <div><div className="text-white/50 text-xs">Prix / kg</div><div>{formatCurrency(metrics.costPerKg)}</div></div>
                      <div><div className="text-white/50 text-xs">Prix / Pièce</div><div>{formatCurrency(form.yieldCount ? sellingPrice/form.yieldCount : 0)}</div></div>
                  </div>
               </div>
 
               {onDelete && form.id!=='new' && (
-                 <button 
-                    type="button" 
-                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                    className="w-full mx-4 mb-8 bg-ios-red text-white font-bold py-3 rounded-xl text-center shadow cursor-pointer active:scale-[0.98] transition-transform block"
-                 >
-                    Supprimer la recette
-                 </button>
+                 <div className="mb-12">
+                     <button 
+                        type="button" 
+                        onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+                        className="w-full mx-4 mb-3 bg-white text-ios-blue border border-ios-blue font-bold py-3 rounded-xl text-center shadow-sm cursor-pointer active:scale-[0.98] transition-transform block"
+                     >
+                        Dupliquer la recette
+                     </button>
+
+                     <button 
+                        type="button" 
+                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                        className="w-full mx-4 bg-ios-red text-white font-bold py-3 rounded-xl text-center shadow cursor-pointer active:scale-[0.98] transition-transform block"
+                     >
+                        Supprimer la recette
+                     </button>
+                 </div>
               )}
            </div>
         </div>
@@ -789,40 +816,58 @@
          if (view === 'recipes') {
              // TRI ALPHABETIQUE
              const sortedRecipes = [...recipes].sort((a,b) => a.name.localeCompare(b.name));
+             const subRecipes = sortedRecipes.filter(r => r.category === 'Sous-recette');
+             const mainRecipes = sortedRecipes.filter(r => r.category !== 'Sous-recette');
+
+             const renderRecipeList = (list) => (
+                list.map((r) => {
+                  const met = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
+                  const sell = met.totalCost / (1-(settings.defaultMargin/100));
+                  const unitPrice = r.yieldCount > 0 ? sell / r.yieldCount : 0;
+
+                  return (
+                     <SwipeRow key={r.id} onDelete={()=>{
+                        requestConfirm(
+                           "Supprimer la recette ?",
+                           `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`,
+                           () => setRecipes(recipes.filter(x => x.id !== r.id))
+                        );
+                     }}>
+                        <div className="pl-4 pr-4 py-3 flex w-full items-center gap-2 active:bg-gray-100 transition-colors" onClick={()=>setViewingId(r.id)}>
+                           <div className="flex-1 min-w-0">
+                              <div className="font-semibold truncate text-[17px]">{r.name}</div>
+                              <div className="text-[14px] text-gray-500">{r.category}</div>
+                           </div>
+                           <div className="flex flex-col items-end min-w-[120px] border-l border-gray-100 pl-2 ml-2 text-right">
+                              <div className="text-ios-blue font-bold text-[14px]">Vente {formatCurrency(sell)}</div>
+                              <div className="text-[11px] text-green-600 font-medium">Unit. {formatCurrency(unitPrice)}</div>
+                              <div className="text-[11px] text-gray-500 font-medium">{formatCurrency(met.costPerKg)} / kg</div>
+                              <div className="text-[11px] text-yellow-600 font-medium">Mat. {formatCurrency(met.materialCost)}</div>
+                           </div>
+                           <ChevronRight size={20} className="text-ios-subtext opacity-30" />
+                        </div>
+                     </SwipeRow>
+                  )
+               })
+             );
+
              return (
                  <div className="pb-32">
                     <IOSHeader title="Recettes" rightAction={<button onClick={()=>setEditingId('new')} className="text-ios-blue"><Plus size={24}/></button>} />
-                    <IOSListGroup>
-                       {sortedRecipes.map((r, i) => {
-                          const met = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
-                          const sell = met.totalCost / (1-(settings.defaultMargin/100));
-                          const unitPrice = r.yieldCount > 0 ? sell / r.yieldCount : 0;
+                    
+                    {mainRecipes.length > 0 && (
+                      <IOSListGroup title="Recettes Principales">
+                        {renderRecipeList(mainRecipes)}
+                      </IOSListGroup>
+                    )}
 
-                          return (
-                             <SwipeRow key={r.id} onDelete={()=>{
-                                requestConfirm(
-                                   "Supprimer la recette ?",
-                                   `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`,
-                                   () => setRecipes(recipes.filter(x => x.id !== r.id))
-                                );
-                             }}>
-                                <div className="pl-4 pr-4 py-3 flex w-full items-center gap-2 active:bg-gray-100 transition-colors" onClick={()=>setViewingId(r.id)}>
-                                   <div className="flex-1 min-w-0">
-                                      <div className="font-semibold truncate text-[17px]">{r.name}</div>
-                                      <div className="text-[14px] text-gray-500">{r.category}</div>
-                                   </div>
-                                   <div className="flex flex-col items-end min-w-[100px] border-l border-gray-100 pl-2 ml-2">
-                                      <div className="text-ios-blue font-bold text-[15px]">Vente {formatCurrency(sell)}</div>
-                                      <div className="text-[11px] text-green-600 font-bold">Unit. {formatCurrency(unitPrice)}</div>
-                                      <div className="text-[11px] text-yellow-600 font-bold">Mat. {formatCurrency(met.materialCost)}</div>
-                                   </div>
-                                   <ChevronRight size={20} className="text-ios-subtext opacity-30" />
-                                </div>
-                             </SwipeRow>
-                          )
-                       })}
-                       {recipes.length === 0 && <div className="p-4 text-center text-gray-400">Aucune recette</div>}
-                    </IOSListGroup>
+                    {subRecipes.length > 0 && (
+                      <IOSListGroup title="Sous-recettes">
+                        {renderRecipeList(subRecipes)}
+                      </IOSListGroup>
+                    )}
+
+                    {recipes.length === 0 && <div className="p-4 text-center text-gray-400 mt-10">Aucune recette</div>}
                     
                     {/* MODAL LECTURE SEULE */}
                     {viewingId && !editingId && (
@@ -859,6 +904,19 @@
                                    setViewingId(null);
                                 }
                              );
+                          } : undefined}
+                          onDuplicate={editingId!=='new' ? () => {
+                             const original = recipes.find(r => r.id === editingId);
+                             if (original) {
+                                const newRecipe = {
+                                   ...original,
+                                   id: generateId(),
+                                   name: `${original.name} (Copie)`,
+                                };
+                                setRecipes([...recipes, newRecipe]);
+                                setEditingId(null);
+                                alert(`Recette dupliquée : ${newRecipe.name}`);
+                             }
                           } : undefined}
                        />
                     )}

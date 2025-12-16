@@ -6,29 +6,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ChocoCost V1.10</title>
+  <title>ChocoCost Pro</title>
   
-  <!-- 1. STYLE (Tailwind) -->
+  <!-- FONTS -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- TAILWIND -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            ios: {
-              bg: '#f2f2f7', card: '#ffffff', text: '#000000', subtext: '#8e8e93',
-              blue: '#007aff', red: '#ff3b30', gold: '#d4af37', cocoa: '#3e2723',
-            }
+            lux: { black: '#121212', card: '#1e1e1e', gold: '#D4AF37', red: '#ff453a' },
+            ios: { bg: '#F2F2F7', card: '#ffffff', blue: '#007aff', red: '#ff3b30', gray: '#8E8E93' }
           },
           fontFamily: {
-            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+            sans: ['"Inter"', 'sans-serif'],
+          },
+          boxShadow: {
+            'glow': '0 4px 20px -5px rgba(212, 175, 55, 0.25)',
+            'ios': '0 4px 12px rgba(0,0,0,0.06)',
           }
         }
       }
     }
   </script>
 
-  <!-- 2. MOTEUR (Babel + React) -->
+  <!-- REACT -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="importmap">
     {
@@ -41,58 +49,130 @@
   </script>
 
   <style>
-    body { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-touch-callout: none; }
+    body { 
+        -webkit-tap-highlight-color: transparent; 
+        user-select: none; 
+        -webkit-touch-callout: none;
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
     .pt-safe { padding-top: env(safe-area-inset-top); }
     .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     
-    /* Animation fluide pour les modals */
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
     
-    /* Animation fade in */
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .animate-fade-in { animation: fadeIn 0.2s ease-out; }
 
-    /* Animation Scale pour l'alerte */
     @keyframes scaleIn { from { transform: scale(1.1); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .animate-scale-in { animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
   </style>
 </head>
-<body class="bg-ios-bg text-black h-screen overflow-hidden selection:bg-ios-blue selection:text-white">
+<body class="h-screen overflow-hidden">
   
   <div id="root" class="h-full"></div>
 
-  <!-- 3. APPLICATION (Code complet intégré) -->
   <script type="text/babel" data-type="module">
     import React, { useState, useEffect, useMemo, useRef } from 'react';
     import { createRoot } from 'react-dom/client';
     import { 
       LayoutDashboard, ChefHat, Settings, Plus, Trash2, Download, Upload, 
-      ChevronRight, List, X, Search, ChevronLeft, Filter, Camera, Image as ImageIcon, AlertTriangle, Link as LinkIcon
+      ChevronRight, List, X, Search, ChevronLeft, Filter, Camera, Link as LinkIcon, ShoppingBag, AlertTriangle, Palette, Check
     } from 'lucide-react';
 
-    // --- VERSION ---
-    const APP_VERSION = "V1.10";
-
-    // --- DATA & UTILITAIRES ---
+    const APP_VERSION = "V1.18 - Choco Theme";
     const generateId = () => Math.random().toString(36).substr(2, 9);
-    
-    const formatCurrency = (amount) => 
-      new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(isNaN(amount) ? 0 : amount);
+    const formatCurrency = (amount) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(isNaN(amount) ? 0 : amount);
+
+    // --- THEME ENGINE ---
+    const THEMES = {
+        luxury: {
+            id: 'luxury',
+            name: 'Luxe (Or & Noir)',
+            bg: 'bg-[#121212]',
+            text: 'text-[#F5F5F7]',
+            textSec: 'text-gray-400',
+            card: 'bg-[#1e1e1e] border border-white/10',
+            cardBorder: 'border-white/5',
+            input: 'bg-transparent text-white border-b border-gray-700 focus:border-lux-gold',
+            accent: 'text-[#D4AF37]',
+            accentBg: 'bg-[#D4AF37]',
+            navBg: 'bg-[#121212]/90 border-t border-[#D4AF37]/30',
+            fontHead: 'font-serif',
+            iconColor: '#D4AF37',
+            alertBg: 'bg-[#1e1e1e] border border-[#D4AF37]/30',
+            btnPrimary: 'bg-[#D4AF37] text-black',
+            chartBg: 'bg-gradient-to-br from-[#2a2a2a] to-black border border-[#D4AF37]/30',
+            switchOn: 'bg-[#D4AF37]',
+            switchOff: 'bg-transparent border border-gray-600',
+            tabActive: 'bg-[#D4AF37] text-black',
+            tabInactive: 'text-gray-500',
+            navIconActive: 'text-[#D4AF37]',
+            navIconInactive: 'text-gray-500',
+            appTitleSize: 'text-2xl',
+            searchBg: 'bg-[#1e1e1e] border border-white/10'
+        },
+        standard: {
+            id: 'standard',
+            name: 'Standard (V1.12)',
+            bg: 'bg-[#F2F2F7]',
+            text: 'text-black',
+            textSec: 'text-gray-500',
+            card: 'bg-white shadow-ios', 
+            cardBorder: 'border-gray-200',
+            input: 'bg-transparent text-black border-b border-gray-300 focus:border-ios-blue',
+            accent: 'text-[#007aff]',
+            accentBg: 'bg-[#007aff]',
+            navBg: 'bg-[#F9F9F9]/90 border-t border-gray-200',
+            fontHead: 'font-sans font-bold tracking-tight',
+            iconColor: '#007aff',
+            alertBg: 'bg-white/90 backdrop-blur shadow-xl',
+            btnPrimary: 'bg-[#007aff] text-white',
+            chartBg: 'bg-white shadow-md text-black',
+            switchOn: 'bg-[#34c759]',
+            switchOff: 'bg-[#e9e9ea]',
+            tabActive: 'bg-[#007aff] text-white',
+            tabInactive: 'text-gray-500',
+            navIconActive: 'text-[#007aff]',
+            navIconInactive: 'text-gray-400',
+            appTitleSize: 'text-4xl', 
+            searchBg: 'bg-gray-200/50'
+        },
+        choco: {
+            id: 'choco',
+            name: 'Atelier Gourmand',
+            bg: 'bg-[#FFFBF7]',
+            text: 'text-[#4A342E]',
+            textSec: 'text-[#8D7A73]',
+            card: 'bg-white shadow-sm border border-[#F0EAE6]', 
+            cardBorder: 'border-[#F0EAE6]',
+            input: 'bg-transparent text-[#4A342E] border-b border-[#D7CCC8] focus:border-[#A67B5B]',
+            accent: 'text-[#A67B5B]',
+            accentBg: 'bg-[#A67B5B]',
+            navBg: 'bg-[#FFFBF7]/95 border-t border-[#F0EAE6]',
+            fontHead: 'font-sans font-bold tracking-tight',
+            iconColor: '#A67B5B',
+            alertBg: 'bg-[#FFFBF7] shadow-xl border border-[#F0EAE6]',
+            btnPrimary: 'bg-[#A67B5B] text-white',
+            chartBg: 'bg-white shadow-sm border border-[#F0EAE6] text-[#4A342E]',
+            switchOn: 'bg-[#A67B5B]',
+            switchOff: 'bg-[#E0D4CD]',
+            tabActive: 'bg-[#A67B5B] text-white',
+            tabInactive: 'text-[#8D7A73]',
+            navIconActive: 'text-[#4A342E]',
+            navIconInactive: 'text-[#D7CCC8]',
+            appTitleSize: 'text-3xl', 
+            searchBg: 'bg-white border border-[#F0EAE6]'
+        }
+    };
 
     const DEFAULT_SETTINGS = { 
-      hourlyRate: 15.00, 
-      defaultMargin: 40, 
-      electricityCost: 0, 
-      wastePercentage: 5, 
-      chefName: 'Chef Audrey' 
+      hourlyRate: 15.00, defaultMargin: 40, electricityCost: 0, wastePercentage: 5, chefName: 'Chef Chocolatier', hiddenCategories: [], theme: 'luxury'
     };
-    
     const DEFAULT_CATEGORIES = ['Chocolat', 'Sous-recette', 'Fruits Secs', 'Sucre', 'Crèmerie', 'Arômes', 'Confiserie', 'Pâte à tartiner'];
     const PREDEFINED_ALLERGENS = ['Gluten', 'Lait', 'Œufs', 'Fruits à coque', 'Arachides', 'Soja', 'Sésame', 'Sulfites'];
 
-    // Fonction de redimensionnement d'image (Max 800px)
     const resizeImage = (file, maxWidth = 800) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -103,27 +183,18 @@
                 img.onload = () => {
                     const elem = document.createElement('canvas');
                     const scaleFactor = maxWidth / img.width;
-                    const width = maxWidth;
-                    const height = img.height * scaleFactor;
-                    
-                    elem.width = width;
-                    elem.height = height;
+                    elem.width = maxWidth;
+                    elem.height = img.height * scaleFactor;
                     const ctx = elem.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    // Compression JPEG 0.8
+                    ctx.drawImage(img, 0, 0, elem.width, elem.height);
                     resolve(elem.toDataURL('image/jpeg', 0.8));
                 };
-                img.onerror = error => reject(error);
             };
-            reader.onerror = error => reject(error);
         });
     };
 
-    // --- LOGIQUE DE CALCUL ---
     const calculateRecipeMetrics = (recipeId, allRecipes, allIngredients, settings, depth = 0) => {
       if (depth > 10) return { totalCost: 0, materialCost: 0, laborCost: 0, wasteCost: 0, totalWeight: 0, costPerKg: 0 }; 
-      
       const recipe = allRecipes.find(r => r.id === recipeId);
       if (!recipe) return { totalCost: 0, materialCost: 0, laborCost: 0, wasteCost: 0, totalWeight: 0, costPerKg: 0 };
 
@@ -137,15 +208,12 @@
             const subMetrics = calculateRecipeMetrics(item.recipeId, allRecipes, allIngredients, settings, depth + 1);
             const subCostPerGram = subMetrics.totalWeight > 0 ? (subMetrics.totalCost / subMetrics.totalWeight) : 0;
             totalMatCost += item.quantity * subCostPerGram;
-
           } else if (item.ingredientId) {
             const ing = allIngredients.find(i => i.id === item.ingredientId);
             if (ing) {
               if (ing.unit === 'pce') {
                 totalMatCost += item.quantity * ing.price;
-                if (ing.weightPerUnit) {
-                   totalWeight += item.quantity * ing.weightPerUnit;
-                }
+                if (ing.weightPerUnit) totalWeight += item.quantity * ing.weightPerUnit;
               } else {
                 totalWeight += item.quantity; 
                 totalMatCost += (item.quantity / 1000) * ing.price;
@@ -158,793 +226,371 @@
       const laborCost = (recipe.prepTimeMinutes / 60) * settings.hourlyRate;
       const wasteCost = totalMatCost * (settings.wastePercentage / 100);
       const productionCost = totalMatCost + laborCost + wasteCost;
-      
-      return { 
-        costPerKg: totalWeight > 0 ? (productionCost / (totalWeight / 1000)) : 0, 
-        totalWeight, 
-        materialCost: totalMatCost, 
-        laborCost, 
-        wasteCost, 
-        totalCost: productionCost 
-      };
+      return { costPerKg: totalWeight > 0 ? (productionCost / (totalWeight / 1000)) : 0, totalWeight, materialCost: totalMatCost, laborCost, wasteCost, totalCost: productionCost };
     };
 
-    // --- COMPOSANTS UI (IOS STYLE) ---
+    // --- UI COMPONENTS ---
 
-    // 1. Custom Alert Modal (Remplacement de window.confirm)
-    const IOSAlert = ({ isOpen, title, message, onConfirm, onCancel }) => {
+    const ThemeAlert = ({ isOpen, title, message, onConfirm, onCancel, theme }) => {
       if (!isOpen) return null;
       return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" style={{zIndex: 9999}}>
-          <div className="bg-white/90 backdrop-blur-xl w-[270px] rounded-2xl text-center shadow-xl transform transition-all animate-scale-in">
-            <div className="p-5">
-              <h3 className="font-bold text-[17px] mb-1 text-black">{title}</h3>
-              <p className="text-[13px] text-black leading-snug">{message}</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className={`${theme.alertBg} w-[280px] rounded-2xl text-center overflow-hidden animate-scale-in`}>
+            <div className="p-6">
+              <h3 className={`${theme.fontHead} text-xl mb-2 ${theme.accent} font-bold`}>{title}</h3>
+              <p className={`text-sm ${theme.textSec} leading-relaxed`}>{message}</p>
             </div>
-            <div className="flex border-t border-gray-300/50 text-[17px]">
-              <button 
-                onClick={onCancel} 
-                className="flex-1 py-3 text-[#007aff] font-normal border-r border-gray-300/50 active:bg-gray-200/50 rounded-bl-2xl outline-none"
-              >
-                Annuler
-              </button>
-              <button 
-                onClick={onConfirm} 
-                className="flex-1 py-3 text-[#ff3b30] font-bold active:bg-gray-200/50 rounded-br-2xl outline-none"
-              >
-                Confirmer
-              </button>
+            <div className={`flex border-t ${theme.cardBorder}`}>
+              <button onClick={onCancel} className={`flex-1 py-3 ${theme.textSec} font-medium active:opacity-50`}>Annuler</button>
+              <div className={`w-px ${theme.cardBorder}`}></div>
+              <button onClick={onConfirm} className={`flex-1 py-3 ${theme.accent} font-bold active:opacity-50`}>Confirmer</button>
             </div>
           </div>
         </div>
       );
     };
-    
-    const IOSHeader = ({ title, rightAction, subtitle, leftAction, transparent = false }) => (
-      <div className={`sticky top-0 z-20 pt-safe px-4 pb-2 transition-all ${transparent ? 'bg-transparent' : 'bg-ios-bg/90 backdrop-blur-xl border-b border-gray-300/50'}`}>
-        <div className="flex justify-between items-center h-11">
-           <div className="min-w-[40px] flex items-center">{leftAction || <div className="w-8"></div>}</div>
-           {rightAction ? rightAction : <div className="w-8"></div>}
+
+    const ThemeSwitch = ({ checked, onChange, theme }) => (
+        <div onClick={onChange} className={`w-[46px] h-[26px] rounded-full p-[2px] transition-colors duration-300 cursor-pointer ${checked ? theme.switchOn : theme.switchOff}`}>
+            <div className={`w-[20px] h-[20px] rounded-full shadow-sm transform transition-transform duration-300 bg-white ${checked ? 'translate-x-[20px]' : 'translate-x-0'}`}/>
         </div>
-        {!transparent && (
-            <div className="mt-1 pb-2">
-                <h1 className="text-[34px] font-bold tracking-tight text-black leading-tight">{title}</h1>
-                {subtitle && <div className="text-ios-subtext font-medium text-sm mt-0.5">{subtitle}</div>}
-            </div>
-        )}
+    );
+
+    const ThemeHeader = ({ title, rightAction, subtitle, leftAction, theme, transparent = false, centered = true }) => (
+      <div className={`sticky top-0 z-20 pt-safe px-4 pb-2 transition-all duration-300 ${transparent ? 'bg-transparent' : theme.bg === 'bg-[#121212]' ? 'bg-[#121212]/90 backdrop-blur-md border-b border-white/5' : 'bg-[#F2F2F7]/90 backdrop-blur-md border-b border-gray-200'}`}>
+        <div className="flex justify-between items-center h-12">
+           <div className={`min-w-[40px] flex items-center ${theme.accent}`}>{leftAction}</div>
+           <div className={`flex-1 ${centered ? 'text-center' : 'text-left'}`}>
+               <h1 className={`${theme.fontHead} ${theme.id === 'standard' ? 'text-xl' : theme.appTitleSize} font-bold tracking-wide ${theme.text} drop-shadow-sm`}>{title}</h1>
+           </div>
+           <div className={`min-w-[40px] flex justify-end ${theme.accent}`}>{rightAction}</div>
+        </div>
+        {!centered && subtitle && ( <div className="pb-2"><div className={`text-xs font-bold uppercase tracking-widest ${theme.textSec}`}>{subtitle}</div></div> )}
       </div>
     );
 
-    const IOSListGroup = ({ children, title }) => (
+    const ThemeInput = ({ value, onChange, placeholder, type="text", className="", theme, ...props }) => (
+      <input type={type} value={value} onChange={onChange} placeholder={placeholder} className={`${theme.input} text-[16px] outline-none py-2 transition-colors ${className}`} {...props} />
+    );
+
+    const ThemeListGroup = ({ children, title, theme }) => (
       <div className="mb-6">
-        {title && <div className="px-4 py-2 text-[13px] uppercase text-ios-subtext font-semibold">{title}</div>}
-        <div className="bg-white rounded-xl overflow-hidden shadow-sm mx-4">
-           {children}
-        </div>
+        {title && <div className={`px-4 py-2 text-xs uppercase tracking-widest font-bold ${theme.textSec}`}>{title}</div>}
+        <div className={`${theme.card} rounded-xl overflow-hidden mx-4`}>{children}</div>
       </div>
     );
 
-    const SwipeRow = ({ children, onDelete, enabled = true }) => {
+    const ThemeListItem = ({ children, onClick, icon: Icon, label, value, isLast = false, destructive = false, theme }) => (
+      <div onClick={onClick} className={`pl-4 pr-4 py-3.5 flex items-center justify-between active:opacity-70 transition-opacity cursor-pointer relative ${!isLast ? `border-b ${theme.cardBorder}` : ''}`}>
+         <div className="flex items-center gap-3 overflow-hidden w-full">
+            {Icon && <div className={theme.accent}><Icon size={20} /></div>}
+            <div className={`text-[16px] truncate w-full ${destructive ? 'text-red-500' : theme.text}`}>{label || children}</div>
+         </div>
+         {(value || onClick) && (
+             <div className={`flex items-center gap-2 text-[15px] pl-2 shrink-0 ${theme.textSec}`}>
+                {value}
+                {onClick && <ChevronRight size={18} className="opacity-40" />}
+             </div>
+         )}
+      </div>
+    );
+
+    const SwipeRow = ({ children, onDelete, enabled = true, theme }) => {
       const [translateX, setTranslateX] = useState(0);
       const startX = useRef(null);
-      
-      const handleTouchStart = (e) => {
-        if (!enabled) return;
-        startX.current = e.touches[0].clientX;
-      };
-
+      const handleTouchStart = (e) => { if (enabled) startX.current = e.touches[0].clientX; };
       const handleTouchMove = (e) => {
         if (!enabled || startX.current === null) return;
-        const currentX = e.touches[0].clientX;
-        const diff = currentX - startX.current;
-        
-        if (diff < 0) {
-           setTranslateX(Math.max(diff, -100));
-        } else if (translateX < 0) {
-           setTranslateX(Math.min(diff - 80, 0));
-        }
+        const diff = e.touches[0].clientX - startX.current;
+        if (diff < 0) setTranslateX(Math.max(diff, -80));
+        else if (translateX < 0) setTranslateX(Math.min(diff - 80, 0));
       };
-
-      const handleTouchEnd = () => {
-        if (!enabled) return;
-        if (translateX < -40) {
-          setTranslateX(-80);
-        } else {
-          setTranslateX(0);
-        }
-        startX.current = null;
-      };
-
-      const handleContentClick = (e) => {
-         if (translateX < 0) {
-            e.stopPropagation();
-            setTranslateX(0);
-         }
-      };
-
+      const handleTouchEnd = () => { if (enabled) { if (translateX < -40) setTranslateX(-80); else setTranslateX(0); startX.current = null; } };
       return (
-         <div className="grid grid-cols-1 overflow-hidden border-b border-gray-100 last:border-0 select-none">
-             {/* Arrière-plan (Bouton Supprimer) */}
-             <div className="row-start-1 col-start-1 bg-ios-red flex items-center justify-end pr-6">
-                 <button 
-                    type="button"
-                    className="flex items-center justify-center text-white outline-none"
-                    onClick={(e) => { 
-                       e.stopPropagation(); 
-                       if(onDelete) onDelete(); 
-                       setTranslateX(0); 
-                    }}
-                 >
-                    <Trash2 size={24} />
-                 </button>
+         <div className={`grid grid-cols-1 overflow-hidden border-b ${theme.cardBorder} last:border-0 select-none`}>
+             <div className="row-start-1 col-start-1 bg-red-500 flex items-center justify-end pr-6">
+                 <button type="button" onClick={(e) => { e.stopPropagation(); if(onDelete) onDelete(); setTranslateX(0); }}><Trash2 size={24} className="text-white" /></button>
              </div>
-             
-             {/* Premier plan (Contenu) */}
-             <div 
-                className="row-start-1 col-start-1 bg-white z-10 transition-transform duration-200 ease-out"
-                style={{ transform: `translateX(${translateX}px)` }}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onClickCapture={handleContentClick}
-             >
+             <div className={`row-start-1 col-start-1 z-10 transition-transform duration-200 ease-out ${theme.card}`} style={{ transform: `translateX(${translateX}px)` }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onClickCapture={(e) => { if (translateX < 0) { e.stopPropagation(); setTranslateX(0); } }}>
                 {children}
              </div>
          </div>
       );
     };
 
-    const IOSListItem = ({ children, onClick, icon: Icon, label, value, isLast = false, destructive = false }) => (
-      <div onClick={onClick} className={`pl-4 pr-4 py-3 flex items-center justify-between active:bg-gray-100 transition-colors cursor-pointer relative ${!isLast ? 'border-b border-gray-100' : ''}`}>
-         <div className="flex items-center gap-3 overflow-hidden w-full">
-            {Icon && <div className="text-ios-blue"><Icon size={22} /></div>}
-            <div className={`text-[17px] truncate w-full ${destructive ? 'text-ios-red' : 'text-black'}`}>{label || children}</div>
-         </div>
-         {(value || onClick) && (
-             <div className="flex items-center gap-2 text-ios-subtext text-[17px] pl-2 shrink-0">
-                {value}
-                {onClick && <ChevronRight size={20} className="opacity-30" />}
-             </div>
-         )}
-      </div>
-    );
+    // --- COMPOSANT CARTE UNIVERSEL (DUAL IDENTITY) ---
+    const RecipeCard = ({ recipe, onClick, priceKg, priceUnit, onDelete, theme }) => {
+        const displayImage = recipe.photoUrl || recipe.photo;
 
-    const IOSInput = ({ value, onChange, placeholder, type="text", className="", ...props }) => (
-      <input 
-        type={type} 
-        value={value} 
-        onChange={onChange} 
-        placeholder={placeholder} 
-        className={`bg-transparent text-[17px] text-black placeholder-gray-400 outline-none ${className}`} 
-        {...props}
-      />
-    );
+        // DESIGN STANDARD & CHOCO - IMAGE DESSUS, TEXTE DESSOUS
+        if (theme.id === 'standard' || theme.id === 'choco') {
+            return (
+                <div onClick={onClick} className={`${theme.card} rounded-xl shadow-ios overflow-hidden active:opacity-90 transition-all duration-200 w-full h-full flex flex-col`}>
+                    <div className="aspect-square w-full relative bg-gray-50 border-b border-black/5">
+                        {displayImage ? (
+                            <img src={displayImage} className="w-full h-full object-cover" alt={recipe.name} />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                                <ChefHat size={28} className={theme.textSec} />
+                            </div>
+                        )}
+                    </div>
+                    <div className="p-3 flex flex-col flex-1 justify-between">
+                        <div className="mb-2">
+                             <h3 className={`text-[15px] font-semibold ${theme.text} leading-tight line-clamp-2`}>{recipe.name}</h3>
+                             <div className={`text-[12px] ${theme.textSec} mt-0.5`}>{recipe.yieldCount} pcs</div>
+                        </div>
+                        <div className={`flex items-end justify-between border-t ${theme.cardBorder} pt-2 mt-auto`}>
+                             <div className="flex flex-col">
+                                 <span className={`text-[10px] ${theme.textSec} font-medium uppercase tracking-wide`}>Kg</span>
+                                 <span className={`text-[13px] font-bold ${theme.text}`}>{priceKg}</span>
+                             </div>
+                             <div className="flex flex-col text-right">
+                                 <span className={`text-[10px] ${theme.textSec} font-medium uppercase tracking-wide`}>Unit</span>
+                                 <span className={`text-[13px] font-bold ${theme.accent}`}>{priceUnit}</span>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
 
-    // --- MODULES DE L'APP ---
+        // DESIGN LUXURY (IMMERSIVE STYLE) - TEXTE SUR IMAGE
+        return (
+            <div onClick={onClick} className={`group relative ${theme.card} rounded-xl shadow-md active:scale-95 transition-all duration-300 overflow-hidden flex-shrink-0 w-full`}>
+                <div className="aspect-square w-full relative overflow-hidden">
+                     {displayImage ? ( <img src={displayImage} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={recipe.name} /> ) : ( <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#2a2a2a] to-[#121212]"><ChefHat size={32} className={theme.textSec} /></div> )}
+                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80"></div>
+                </div>
+                <div className="p-3 absolute bottom-0 w-full">
+                    <h3 className="font-serif text-[16px] leading-tight text-white font-medium mb-1 truncate drop-shadow-md">{recipe.name}</h3>
+                    <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-gray-300 font-sans tracking-wide uppercase">Vente {priceKg} / kg</span>
+                        <span className="text-[12px] font-sans font-bold text-lux-gold">Unit. {priceUnit}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
-    const PackagingManager = ({ title, items, setItems }) => {
+    // --- SUB-VIEWS ---
+
+    const PackagingManager = ({ title, items, setItems, theme }) => {
       const [isAdding, setIsAdding] = useState(false);
       const [newItem, setNewItem] = useState({ name: '', price: '' });
-      
-      const handleSave = () => {
-         if (newItem.name) {
-            setItems([...items, { id: generateId(), name: newItem.name, price: parseFloat(newItem.price) || 0 }]);
-            setNewItem({ name: '', price: '' }); setIsAdding(false);
-         }
-      };
-      
-      const sortedItems = [...items].sort((a,b) => a.name.localeCompare(b.name));
-
+      const handleSave = () => { if (newItem.name) { setItems([...items, { id: generateId(), name: newItem.name, price: parseFloat(newItem.price) || 0 }]); setNewItem({ name: '', price: '' }); setIsAdding(false); } };
       return (
-        <IOSListGroup title={title}>
-           {sortedItems.map((item) => (
-              <IOSListItem key={item.id} isLast={false}>
+        <ThemeListGroup title={title} theme={theme}>
+           {items.sort((a,b)=>a.name.localeCompare(b.name)).map((item) => (
+              <ThemeListItem key={item.id} isLast={false} theme={theme}>
                  <div className="flex w-full items-center gap-3">
                     <span className="flex-1 truncate">{item.name}</span>
-                    <div className="w-20 text-right font-bold text-ios-blue flex-shrink-0">
-                       {formatCurrency(item.price)}
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); setItems(items.filter(i => i.id !== item.id)); }}>
-                       <Trash2 size={18} className="text-ios-red opacity-50"/>
-                    </button>
+                    <div className={`w-20 text-right font-bold ${theme.accent} flex-shrink-0`}>{formatCurrency(item.price)}</div>
+                    <button onClick={(e) => { e.stopPropagation(); setItems(items.filter(i => i.id !== item.id)); }}><Trash2 size={16} className="text-red-500 opacity-50"/></button>
                  </div>
-              </IOSListItem>
+              </ThemeListItem>
            ))}
            {isAdding ? (
-              <div className="p-3 bg-gray-50 flex gap-2 items-center border-t border-gray-100">
-                 <input className="flex-1 bg-white p-2 rounded border" placeholder="Nom" value={newItem.name} onChange={e=>setNewItem({...newItem, name: e.target.value})}/>
-                 <input className="w-20 bg-white p-2 rounded border" type="number" placeholder="€" value={newItem.price} onChange={e=>setNewItem({...newItem, price: e.target.value})}/>
-                 <button onClick={handleSave} className="text-ios-blue font-bold px-2">OK</button>
+              <div className={`p-3 flex gap-2 items-center border-t ${theme.cardBorder}`}>
+                 <input className={`flex-1 bg-transparent ${theme.text} p-2 border-b ${theme.cardBorder} outline-none`} placeholder="Nom" value={newItem.name} onChange={e=>setNewItem({...newItem, name: e.target.value})}/>
+                 <input className={`w-20 bg-transparent ${theme.text} p-2 border-b ${theme.cardBorder} outline-none`} type="number" placeholder="€" value={newItem.price} onChange={e=>setNewItem({...newItem, price: e.target.value})}/>
+                 <button onClick={handleSave} className={`${theme.accent} font-bold px-2`}>OK</button>
               </div>
            ) : (
-              <div onClick={() => setIsAdding(true)} className="p-3 text-ios-blue flex items-center gap-2 cursor-pointer active:bg-gray-50 border-t border-gray-100">
-                 <Plus size={20}/> Ajouter
-              </div>
+              <div onClick={() => setIsAdding(true)} className={`p-3 ${theme.accent} text-sm font-bold flex items-center gap-2 cursor-pointer active:opacity-50 border-t ${theme.cardBorder} justify-center`}><Plus size={16}/> Ajouter</div>
            )}
-        </IOSListGroup>
+        </ThemeListGroup>
       );
     };
 
-    // --- VUE DETAIL (Lecture seule) ---
-    const RecipeDetailView = ({ recipe, ingredients, recipes, settings, containers, labels, decorations, foils, onEdit, onBack }) => {
-       const metrics = useMemo(() => {
-         const rawMetrics = calculateRecipeMetrics(recipe.id, recipes, ingredients, settings);
-         
-         const foil = foils.find(f=>f.id===recipe.foilId);
-         const foilCost = (foil?.price||0)*recipe.yieldCount;
-         const packUnit = (containers.find(c=>c.id===recipe.containerId)?.price||0) + (labels.find(l=>l.id===recipe.labelId)?.price||0) + (decorations.find(d=>d.id===recipe.decorationId)?.price||0);
-         const packTotal = foilCost + (packUnit*(recipe.unitCount||0)) + (recipe.extraCost||0);
-         
-         const total = rawMetrics.materialCost + rawMetrics.laborCost + rawMetrics.wasteCost + packTotal;
-         return { 
-            total, 
-            mat: rawMetrics.materialCost, 
-            labor: rawMetrics.laborCost, 
-            waste: rawMetrics.wasteCost,
-            pack: packTotal, 
-            weight: rawMetrics.totalWeight, 
-            costPerKg: rawMetrics.costPerKg 
-         };
-      }, [recipe, recipes, ingredients, settings, containers, labels, decorations, foils]);
+    const RecipeDetailView = ({ recipe, ingredients, recipes, settings, containers, labels, decorations, foils, onEdit, onBack, theme }) => {
+       if (!recipe) return null;
+       const metrics = useMemo(() => calculateRecipeMetrics(recipe.id, recipes, ingredients, settings), [recipe, recipes, ingredients, settings]);
+       const foil = foils.find(f=>f.id===recipe.foilId);
+       const packUnit = (containers.find(c=>c.id===recipe.containerId)?.price||0) + (labels.find(l=>l.id===recipe.labelId)?.price||0) + (decorations.find(d=>d.id===recipe.decorationId)?.price||0);
+       const packTotal = ((foil?.price||0)*recipe.yieldCount) + (packUnit*(recipe.unitCount||0)) + (recipe.extraCost||0);
+       const fullTotalCost = metrics.totalCost + packTotal;
+       const goodsCost = metrics.materialCost + metrics.wasteCost + packTotal;
+       const sellBatch = (goodsCost * (1 + settings.defaultMargin / 100)) + metrics.laborCost;
+       const sellKg = metrics.totalWeight > 0 ? sellBatch / (metrics.totalWeight/1000) : 0;
+       const sellUnit = recipe.yieldCount > 0 ? sellBatch / recipe.yieldCount : 0;
+       const displayImage = recipe.photoUrl || recipe.photo;
+       const allergensList = Array.isArray(recipe.allergens) ? recipe.allergens : (recipe.allergens ? String(recipe.allergens).split(',').map(s=>s.trim()).filter(s=>s) : []);
 
-      const goodsCost = metrics.mat + metrics.waste + metrics.pack;
-      const sellingPriceBatch = (goodsCost * (1 + settings.defaultMargin / 100)) + metrics.labor;
-      const sellingPriceKg = metrics.weight > 0 ? sellingPriceBatch / (metrics.weight/1000) : 0;
-      const sellingPriceUnit = recipe.yieldCount > 0 ? sellingPriceBatch / recipe.yieldCount : 0;
-      
-      // Gestion de l'affichage de l'image (URL prioritaire)
-      const displayImage = recipe.photoUrl || recipe.photo;
-      
-      // Gestion des allergènes (Array ou String)
-      const allergensList = Array.isArray(recipe.allergens) 
-          ? recipe.allergens 
-          : (recipe.allergens ? recipe.allergens.split(',').map(s=>s.trim()).filter(s=>s) : []);
-
-      return (
-         <div className="bg-ios-bg fixed inset-0 z-40 overflow-auto animate-fade-in pb-safe pb-40">
-            {/* HERO IMAGE HEADER */}
-            <div className="relative w-full h-[300px] bg-gray-200">
-                {displayImage ? (
-                    <img src={displayImage} className="w-full h-full object-cover" alt={recipe.name} />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-800 to-amber-950">
-                        <ChefHat size={64} className="text-white/20" />
-                    </div>
-                )}
-                {/* Overlay gradient pour le texte */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                
-                {/* Boutons Header Transparents */}
-                <div className="absolute top-0 left-0 right-0 z-50 pt-safe px-4 py-2 flex justify-between items-center">
-                    <button onClick={onBack} className="w-10 h-10 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white active:bg-black/50 transition-colors">
-                        <ChevronLeft size={24}/>
-                    </button>
-                    <button onClick={onEdit} className="w-10 h-10 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white active:bg-black/50 transition-colors">
-                        <Settings size={20} />
-                    </button>
+       return (
+         <div className={`${theme.bg} fixed inset-0 z-40 overflow-auto animate-fade-in pb-safe pb-40`}>
+            <div className="relative w-full h-[45vh]">
+                {displayImage ? ( <img src={displayImage} className="w-full h-full object-cover" alt={recipe.name} /> ) : ( <div className={`w-full h-full flex items-center justify-center ${theme.id==='luxury'?'bg-[#1e1e1e]':'bg-gray-200'}`}><ChefHat size={64} className={theme.textSec} /></div> )}
+                <div className={`absolute inset-0 bg-gradient-to-b ${theme.id==='luxury'?'from-black/60 via-transparent to-[#121212]':'from-black/40 via-transparent to-[#F2F2F7]'}`}></div>
+                <div className="absolute top-0 w-full pt-safe px-4 py-2 flex justify-between items-center z-50">
+                    <button onClick={onBack} className="w-10 h-10 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center border border-white/10"><ChevronLeft size={24}/></button>
+                    <button onClick={onEdit} className="w-10 h-10 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center border border-white/10"><Settings size={20}/></button>
                 </div>
-
-                {/* Titre sur l'image */}
-                <div className="absolute bottom-6 left-4 right-4">
-                    <div className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">{recipe.category}</div>
-                    <h1 className="text-white text-3xl font-bold leading-tight shadow-sm">{recipe.name}</h1>
+                <div className="absolute bottom-8 left-6 right-6">
+                    <div className={`${theme.accent} text-xs font-bold uppercase tracking-[0.2em] mb-2 drop-shadow-md`}>{recipe.category}</div>
+                    <h1 className={`font-serif text-4xl text-white font-bold leading-tight mb-2 drop-shadow-lg`}>{recipe.name}</h1>
+                    <div className="flex items-center gap-4 text-white/90 text-sm drop-shadow-md">
+                        <span className="flex items-center gap-1"><span className="font-bold">{recipe.prepTimeMinutes}</span> min</span>
+                        <span className="w-1 h-1 rounded-full bg-white/50"></span>
+                        <span className="flex items-center gap-1"><span className="font-bold">{recipe.yieldCount}</span> pcs</span>
+                    </div>
                 </div>
             </div>
-            
-            <div className="p-4 space-y-6 -mt-2 relative z-10">
-               <div className="flex items-center justify-between px-4 text-gray-500 text-sm bg-white rounded-xl py-3 shadow-sm mx-2">
-                   <div className="text-center flex-1 border-r border-gray-100">
-                      <div className="text-black font-bold text-lg">{recipe.prepTimeMinutes}</div>
-                      <div className="text-[10px] uppercase">Minutes</div>
-                   </div>
-                   <div className="text-center flex-1">
-                      <div className="text-black font-bold text-lg">{recipe.yieldCount}</div>
-                      <div className="text-[10px] uppercase">Pièces</div>
-                   </div>
-               </div>
 
-               {/* ALLERGENES TAGS (Amélioré) */}
+            <div className="px-6 space-y-8 relative z-10 -mt-4">
                {allergensList.length > 0 && (
-                   <div className="mx-2 bg-white rounded-xl p-4 shadow-sm">
-                       <div className="flex items-center gap-2 mb-3">
-                           <AlertTriangle className="text-orange-500" size={18} />
-                           <span className="text-xs font-bold uppercase text-gray-500">Allergènes</span>
-                       </div>
-                       <div className="flex flex-wrap gap-2">
-                           {allergensList.map(allergen => (
-                               <span key={allergen} className="px-3 py-1 bg-orange-50 text-orange-700 text-sm font-medium rounded-full border border-orange-100">
-                                   {allergen}
-                               </span>
-                           ))}
-                       </div>
+                   <div className="flex flex-wrap gap-2">
+                       {allergensList.map(allergen => ( <span key={allergen} className={`px-3 py-1 bg-white/10 backdrop-blur text-white/90 border border-white/20 text-xs uppercase tracking-wide rounded-full shadow-sm`}>{allergen}</span> ))}
                    </div>
                )}
 
                <div>
-                 <div className="px-4 text-[13px] uppercase text-ios-subtext font-semibold mb-2">Ingrédients</div>
-                 <IOSListGroup>
-                    {recipe.ingredients.length === 0 && <div className="p-4 text-center text-gray-400 italic">Vide</div>}
+                 <h2 className={`${theme.fontHead} text-2xl ${theme.text} mb-4`}>Ingrédients</h2>
+                 <div className="space-y-3">
+                    {recipe.ingredients.length === 0 && <div className={`${theme.textSec} italic`}>Vide</div>}
                     {recipe.ingredients.map((item, idx) => {
                       const isRec = !!item.recipeId;
                       const ref = isRec ? recipes.find(r=>r.id===item.recipeId) : ingredients.find(i=>i.id===item.ingredientId);
-                      
-                      let lineCost = 0;
-                      if(isRec) {
-                          const subM = calculateRecipeMetrics(item.recipeId, recipes, ingredients, settings);
-                          const costPerG = subM.totalWeight > 0 ? subM.totalCost / subM.totalWeight : 0;
-                          lineCost = item.quantity * costPerG;
-                      } else if(ref) {
-                          if(ref.unit === 'pce') lineCost = item.quantity * ref.price;
-                          else lineCost = (item.quantity / 1000) * ref.price;
-                      }
-
                       return (
-                         <div key={idx} className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-0">
-                            <div>
-                               <div className="font-medium text-[17px]">{ref?.name || '???'}</div>
-                               {isRec && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded">Sous-recette</span>}
-                            </div>
-                            <div className="text-gray-500 font-medium text-right">
-                               <div>{item.quantity} {!isRec && ref?.unit==='pce'?'pce':'g'}</div>
-                               <div className="text-xs text-gray-400">({formatCurrency(lineCost)})</div>
-                            </div>
+                         <div key={idx} className={`flex justify-between items-baseline border-b ${theme.cardBorder} pb-2`}>
+                            <div className="flex-1"><div className={`${theme.textSec} text-base`}>{ref?.name || 'Inconnu'}</div>{isRec && <span className={`text-[10px] ${theme.accent} uppercase tracking-wider`}>Sous-recette</span>}</div>
+                            <div className={`${theme.accent} font-sans font-medium`}>{item.quantity} {!isRec && ref?.unit==='pce'?'pce':'g'}</div>
                          </div>
                       )
                     })}
-                 </IOSListGroup>
+                 </div>
                </div>
 
-               <div>
-                  <div className="px-4 text-[13px] uppercase text-ios-subtext font-semibold mb-2">Préparation</div>
-                  <div className="mx-4 bg-white rounded-xl p-4 text-[17px] text-black leading-relaxed whitespace-pre-wrap shadow-sm">
-                     {recipe.instructions ? recipe.instructions : <span className="text-gray-400 italic">Aucune étape renseignée.</span>}
-                  </div>
-               </div>
+               <div><h2 className={`${theme.fontHead} text-2xl ${theme.text} mb-4`}>Préparation</h2><div className={`${theme.textSec} leading-relaxed font-sans whitespace-pre-wrap`}>{recipe.instructions || <span className="italic">Aucune instruction.</span>}</div></div>
 
-               <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl">
-                 <div className="text-center mb-4 text-white/50 text-xs uppercase font-bold">Analyse Financière</div>
-                 
-                 <div className="flex justify-between items-center mb-2 border-b border-white/10 pb-4">
-                    <div>
-                        <div className="text-2xl font-bold text-white">{formatCurrency(sellingPriceKg)}</div>
-                        <div className="text-xs text-white/70">Prix Vente / kg</div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-2xl font-bold text-white">{formatCurrency(sellingPriceUnit)}</div>
-                        <div className="text-xs text-white/70">Prix Vente / pièce</div>
-                    </div>
+               <div className={`${theme.chartBg} rounded-2xl p-6 relative overflow-hidden mb-10`}>
+                 {theme.id === 'luxury' && <div className="absolute top-0 right-0 w-32 h-32 bg-lux-gold/5 rounded-full blur-2xl -mr-10 -mt-10"></div>}
+                 <div className="flex justify-between items-center mb-6 px-2">
+                    <div><div className={`text-3xl font-serif ${theme.id==='luxury'?'text-white':'text-black'}`}>{formatCurrency(sellKg)}</div><div className={`text-xs ${theme.textSec} uppercase tracking-wide`}>Vente / kg</div></div>
+                    <div className="text-right"><div className={`text-3xl font-serif ${theme.accent}`}>{formatCurrency(sellUnit)}</div><div className={`text-xs ${theme.textSec} uppercase tracking-wide`}>Vente / pièce</div></div>
                  </div>
-
-                 <div className="text-center mb-6 pb-2 border-b border-white/10">
-                    <div className="text-white/70 text-[10px] uppercase tracking-wide mb-1">Prix Vente Total : ((Matière + Emballage + Perte) x Marge) + Main d'œuvre</div>
-                    <div className="text-xl font-bold text-white">{formatCurrency(sellingPriceBatch)}</div>
-                 </div>
-
-                 <div className="grid grid-cols-2 gap-y-4 gap-x-4 text-sm">
-                     <div><div className="text-white/50 text-xs">Matière</div><div>{formatCurrency(metrics.mat)}</div></div>
-                     <div><div className="text-white/50 text-xs">Main d'œuvre</div><div>{formatCurrency(metrics.labor)}</div></div>
-                     <div><div className="text-white/50 text-xs">Emballage</div><div>{formatCurrency(metrics.pack)}</div></div>
-                     <div><div className="text-white/50 text-xs">Perte ({settings.wastePercentage}%)</div><div>{formatCurrency(metrics.waste)}</div></div>
-                     
-                     <div className="col-span-2 border-t border-white/10 my-1"></div>
-                     
-                     <div><div className="text-white/50 text-xs">Coût Production (Total)</div><div>{formatCurrency(metrics.total)}</div></div>
-                     <div><div className="text-white/50 text-xs">Poids Total</div><div>{(metrics.weight/1000).toFixed(2)} kg</div></div>
-                     
-                     <div className="col-span-2 pt-2 border-t border-white/10 flex justify-between items-center mt-1">
-                        <div className="text-white/70 text-xs">Coût Revient / kg</div>
-                        <div className="font-bold">{formatCurrency(metrics.weight > 0 ? metrics.total / (metrics.weight/1000) : 0)}</div>
-                     </div>
+                 <div className={`space-y-2 text-sm border-t ${theme.id==='luxury'?'border-white/10':'border-gray-200'} pt-4`}>
+                     <div className="flex justify-between"><span className={theme.textSec}>Coût Matière</span><span className={theme.textSec}>{formatCurrency(metrics.materialCost)}</span></div>
+                     <div className="flex justify-between"><span className={theme.textSec}>Emballage</span><span className={theme.textSec}>{formatCurrency(packTotal)}</span></div>
+                     <div className="flex justify-between"><span className={theme.textSec}>Main d'œuvre</span><span className={theme.textSec}>{formatCurrency(metrics.laborCost)}</span></div>
+                     <div className={`pt-2 mt-2 border-t ${theme.id==='luxury'?'border-white/10':'border-gray-200'} flex justify-between items-center`}><span className={`${theme.accent} text-xs uppercase font-bold`}>Coût de Revient / kg</span><span className={`${theme.text} font-bold font-sans`}>{formatCurrency(metrics.totalWeight > 0 ? fullTotalCost / (metrics.totalWeight/1000) : 0)}</span></div>
                  </div>
               </div>
-            </div>
-         </div>
-      );
-    }
-
-    // --- VUE EDITION INGREDIENT ---
-    const IngredientEditView = ({ ingredient, categories, onSave, onCancel }) => {
-       const [form, setForm] = useState(ingredient);
-       return (
-         <div className="bg-ios-bg fixed inset-0 z-[60] overflow-auto animate-slide-up pb-safe">
-            <div className="sticky top-0 bg-white/90 backdrop-blur-md border-b z-50 px-4 py-3 flex justify-between items-center pt-safe">
-              <button onClick={onCancel} className="text-ios-blue text-[17px]">Annuler</button>
-              <span className="font-semibold text-[17px]">{form.id === 'new' ? 'Nouvel ingrédient' : 'Édition'}</span>
-              <button onClick={() => onSave({...form, price: parseFloat(form.price) || 0, weightPerUnit: parseFloat(form.weightPerUnit) || 0})} className="text-ios-blue font-bold text-[17px]">OK</button>
-            </div>
-            
-            <div className="p-4 space-y-6 mt-4">
-               <IOSListGroup>
-                  <div className="px-4 py-3 border-b border-gray-100">
-                     <IOSInput placeholder="Nom de l'ingrédient" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-bold text-lg w-full"/>
-                  </div>
-                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                     <span>Prix</span>
-                     <div className="flex items-center gap-2">
-                        <IOSInput type="number" className="text-right w-24" placeholder="Ex: 10" value={form.price} onChange={e=>setForm({...form, price: e.target.value})} />
-                        <span className="text-gray-500">€</span>
-                     </div>
-                  </div>
-                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                     <span>Unité</span>
-                     <select className="bg-transparent text-ios-blue outline-none text-right" value={form.unit} onChange={e=>setForm({...form, unit: e.target.value})}>
-                        <option value="kg">Kilogramme (kg)</option>
-                        <option value="l">Litre (l)</option>
-                        <option value="pce">Pièce (pce)</option>
-                     </select>
-                  </div>
-                  {form.unit === 'pce' && (
-                      <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center animate-fade-in">
-                         <span className="text-black">Poids unitaire (g)</span>
-                         <div className="flex items-center gap-2">
-                            <IOSInput type="number" className="text-right w-24 text-black" placeholder="Ex: 5" value={form.weightPerUnit || ''} onChange={e=>setForm({...form, weightPerUnit: e.target.value})} />
-                            <span className="text-gray-500">g</span>
-                         </div>
-                      </div>
-                  )}
-                  <div className="px-4 py-3 flex justify-between items-center">
-                     <span>Catégorie</span>
-                     <select className="bg-transparent text-ios-blue outline-none text-right" value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>
-                        {[...categories].sort((a,b) => a.localeCompare(b)).map(c=><option key={c} value={c}>{c}</option>)}
-                        <option value="Autre">Autre</option>
-                     </select>
-                  </div>
-               </IOSListGroup>
             </div>
          </div>
        );
     };
 
-    // --- VUE EDITION RECETTE (Modal) ---
-    const RecipeEditView = ({ recipe, ingredients, recipes, categories, containers, labels, decorations, foils, settings, onSave, onCancel, onDelete, onDuplicate }) => {
-      // Conversion allergènes string -> array pour le formulaire
-      const initialAllergens = Array.isArray(recipe.allergens) 
-          ? recipe.allergens 
-          : (recipe.allergens ? recipe.allergens.split(',').map(s=>s.trim()).filter(s=>s) : []);
+    const IngredientEditView = ({ ingredient, categories, onSave, onCancel, theme }) => {
+       const [form, setForm] = useState(ingredient);
+       return (
+         <div className={`${theme.bg} fixed inset-0 z-[60] overflow-auto animate-slide-up pb-safe`}>
+            <ThemeHeader title={form.id==='new'?"Nouvel ingrédient":"Édition"} centered leftAction={<button onClick={onCancel}>Annuler</button>} rightAction={<button onClick={() => onSave({...form, price: parseFloat(form.price) || 0, weightPerUnit: parseFloat(form.weightPerUnit) || 0})}>OK</button>} theme={theme} />
+            <div className="p-4 space-y-6 mt-4">
+               <ThemeListGroup theme={theme}>
+                  <div className={`px-4 py-3 border-b ${theme.cardBorder}`}><ThemeInput placeholder="Nom de l'ingrédient" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-bold text-lg w-full" theme={theme}/></div>
+                  <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center`}><span className={theme.text}>Prix</span><div className="flex items-center gap-2"><ThemeInput type="number" className="text-right w-24" placeholder="Ex: 10" value={form.price} onChange={e=>setForm({...form, price: e.target.value})} theme={theme}/><span className={theme.textSec}>€</span></div></div>
+                  <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center`}><span className={theme.text}>Unité</span><select className={`bg-transparent ${theme.accent} outline-none text-right`} value={form.unit} onChange={e=>setForm({...form, unit: e.target.value})}><option value="kg">Kilogramme (kg)</option><option value="l">Litre (l)</option><option value="pce">Pièce (pce)</option></select></div>
+                  {form.unit === 'pce' && ( <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center animate-fade-in`}><span className={theme.text}>Poids unitaire (g)</span><div className="flex items-center gap-2"><ThemeInput type="number" className="text-right w-24" placeholder="Ex: 5" value={form.weightPerUnit || ''} onChange={e=>setForm({...form, weightPerUnit: e.target.value})} theme={theme} /><span className={theme.textSec}>g</span></div></div> )}
+                  <div className="px-4 py-3 flex justify-between items-center"><span className={theme.text}>Catégorie</span><select className={`bg-transparent ${theme.accent} outline-none text-right`} value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>{[...categories].sort((a,b) => a.localeCompare(b)).map(c=><option key={c} value={c}>{c}</option>)}<option value="Autre">Autre</option></select></div>
+               </ThemeListGroup>
+            </div>
+         </div>
+       );
+    };
 
-      const [form, setForm] = useState({...recipe, allergens: initialAllergens});
+    const RecipeEditView = ({ recipe, ingredients, recipes, categories, containers, labels, decorations, foils, settings, onSave, onCancel, onDelete, onDuplicate, theme }) => {
+      if (!recipe) return null;
+      const [form, setForm] = useState(() => {
+          const safeAllergens = Array.isArray(recipe.allergens) ? recipe.allergens : (recipe.allergens ? String(recipe.allergens).split(',').map(s=>s.trim()).filter(s=>s) : []);
+          return { ...recipe, ingredients: recipe.ingredients || [], allergens: safeAllergens, prepTimeMinutes: recipe.prepTimeMinutes||0, yieldCount: recipe.yieldCount||1, unitCount: recipe.unitCount||0, extraCost: recipe.extraCost||0 };
+      });
       const [addMode, setAddMode] = useState(null);
       const [searchQuery, setSearchQuery] = useState('');
-      const [customAllergen, setCustomAllergen] = useState('');
       const fileInputRef = useRef(null);
-
       const isSubRecipe = form.category === 'Sous-recette';
-      const toggleSubRecipe = () => {
-         setForm(prev => ({ ...prev, category: prev.category === 'Sous-recette' ? 'Confiserie' : 'Sous-recette' }));
-      };
-
-      const handlePhotoUpload = async (e) => {
-         const file = e.target.files[0];
-         if (!file) return;
-         try {
-             const resizedDataUrl = await resizeImage(file, 800);
-             setForm(prev => ({ ...prev, photo: resizedDataUrl }));
-         } catch (error) {
-             alert("Erreur lors du traitement de l'image");
-             console.error(error);
-         }
-      };
-
-      const toggleAllergen = (allergen) => {
-          const current = form.allergens || [];
-          if (current.includes(allergen)) {
-              setForm({...form, allergens: current.filter(a => a !== allergen)});
-          } else {
-              setForm({...form, allergens: [...current, allergen]});
-          }
-      };
-
-      const addCustomAllergen = () => {
-          if(customAllergen && !form.allergens.includes(customAllergen)) {
-              setForm({...form, allergens: [...form.allergens, customAllergen]});
-              setCustomAllergen('');
-          }
-      };
-
-      const metrics = useMemo(() => {
-         const tempAllRecipes = recipes.map(r => r.id === form.id ? form : r);
-         if (form.id === 'new') tempAllRecipes.push(form);
-
-         const rawMetrics = calculateRecipeMetrics(form.id === 'new' ? form.id : form.id, tempAllRecipes.length > 0 ? tempAllRecipes : [form], ingredients, settings);
-         
-         const foil = foils.find(f=>f.id===form.foilId);
-         const foilCost = (foil?.price||0)*form.yieldCount;
-         const packUnit = (containers.find(c=>c.id===form.containerId)?.price||0) + (labels.find(l=>l.id===form.labelId)?.price||0) + (decorations.find(d=>d.id===form.decorationId)?.price||0);
-         const packTotal = foilCost + (packUnit*(form.unitCount||0)) + (form.extraCost||0);
-         const total = rawMetrics.materialCost + rawMetrics.laborCost + rawMetrics.wasteCost + packTotal;
-         
-         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, waste: rawMetrics.wasteCost, pack: packTotal, costPerKg: rawMetrics.costPerKg, weight: rawMetrics.totalWeight };
-      }, [form, recipes, ingredients, settings, containers, labels, decorations, foils]);
-
-      const goodsCost = metrics.mat + metrics.waste + metrics.pack;
-      const sellingPriceBatch = (goodsCost * (1 + settings.defaultMargin / 100)) + metrics.labor;
-      const sellingPriceKg = metrics.weight > 0 ? sellingPriceBatch / (metrics.weight/1000) : 0;
-      const sellingPriceUnit = form.yieldCount > 0 ? sellingPriceBatch / form.yieldCount : 0;
-      
-      const displayImage = form.photoUrl || form.photo;
+      const toggleSubRecipe = () => { setForm(prev => ({ ...prev, category: prev.category === 'Sous-recette' ? 'Confiserie' : 'Sous-recette' })); };
+      const handlePhotoUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { const resized = await resizeImage(file, 800); setForm(prev => ({ ...prev, photo: resized })); } catch (e) { console.error(e); } };
+      const toggleAllergen = (allergen) => { const current = form.allergens || []; if (current.includes(allergen)) setForm({...form, allergens: current.filter(a => a !== allergen)}); else setForm({...form, allergens: [...current, allergen]}); };
 
       return (
-        <div className="bg-ios-bg fixed inset-0 z-[60] overflow-auto animate-slide-up pb-safe pb-40">
-           <div className="sticky top-0 bg-white/90 backdrop-blur-md border-b z-50 px-4 py-3 flex justify-between items-center pt-safe">
-              <button onClick={onCancel} className="text-ios-blue text-[17px]">Annuler</button>
-              <span className="font-semibold text-[17px]">{form.id==='new'?'Nouvelle':'Édition'}</span>
-              <button onClick={() => onSave(form)} className="text-ios-blue font-bold text-[17px]">OK</button>
-           </div>
-           
+        <div className={`${theme.bg} fixed inset-0 z-[60] overflow-auto animate-slide-up pb-safe pb-40`}>
+           <ThemeHeader title={form.id==='new'?"Nouvelle":"Édition"} leftAction={<button onClick={onCancel} className={theme.textSec}>Annuler</button>} rightAction={<button onClick={() => onSave(form)} className={`${theme.accent} font-bold`}>Sauvegarder</button>} theme={theme} />
            <div className="p-4 space-y-6">
-              {/* PHOTO UPLOAD + LIEN */}
-              <div className="flex flex-col items-center justify-center">
-                  <div 
-                    className="w-32 h-32 rounded-2xl bg-gray-200 overflow-hidden relative shadow-md cursor-pointer group mb-4"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                      {displayImage ? (
-                          <img src={displayImage} className="w-full h-full object-cover" alt="Recette" />
-                      ) : (
-                          <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                              <Camera size={32} />
-                              <span className="text-[10px] mt-1">Ajouter</span>
-                          </div>
-                      )}
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                         <span className="text-white text-xs font-bold">Modifier</span>
-                      </div>
-                  </div>
-                  
-                  <div className="w-full">
-                       <IOSListGroup>
-                            <div className="px-4 py-3 flex items-center gap-3">
-                                <LinkIcon size={20} className="text-gray-400" />
-                                <IOSInput 
-                                    placeholder="Lien Image (https://...)" 
-                                    value={form.photoUrl || ''} 
-                                    onChange={e=>setForm({...form, photoUrl: e.target.value})} 
-                                    className="w-full text-sm"
-                                />
-                            </div>
-                            <div className="px-4 py-3 border-t border-gray-100 flex justify-center">
-                                <button onClick={() => fileInputRef.current?.click()} className="text-ios-blue text-sm font-medium">
-                                    Ou choisir une photo locale
-                                </button>
-                            </div>
-                       </IOSListGroup>
+              <div className="flex justify-center">
+                  <div className={`w-32 h-32 rounded-full border-2 border-dashed ${theme.id==='luxury'?'border-lux-gold/30':'border-gray-300'} flex items-center justify-center overflow-hidden relative cursor-pointer group ${theme.card}`} onClick={() => fileInputRef.current?.click()}>
+                      {(form.photoUrl || form.photo) ? ( <img src={form.photoUrl || form.photo} className="w-full h-full object-cover opacity-80 group-hover:opacity-50 transition-opacity" /> ) : ( <Camera className={theme.textSec} size={32} /> )}
                   </div>
                   <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
               </div>
+              <div className="px-4"><ThemeInput placeholder="Ou lien image HTTPS..." value={form.photoUrl||''} onChange={e=>setForm({...form, photoUrl: e.target.value})} className="text-center text-sm" theme={theme} /></div>
 
-              <IOSListGroup>
-                 <div className="px-4 py-3 border-b border-gray-100"><IOSInput placeholder="Nom de la recette" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-bold text-xl w-full"/></div>
-                 
-                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center cursor-pointer" onClick={toggleSubRecipe}>
-                    <span className="text-[17px]">Est une sous-recette</span>
-                    <div className={`w-[51px] h-[31px] rounded-full p-[2px] transition-colors duration-200 ${isSubRecipe ? 'bg-[#34c759]' : 'bg-[#e9e9ea]'}`}>
-                        <div className={`bg-white w-[27px] h-[27px] rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.2)] transform transition-transform duration-200 ${isSubRecipe ? 'translate-x-[20px]' : 'translate-x-0'}`}/>
-                    </div>
-                 </div>
+              <ThemeListGroup theme={theme}>
+                 <div className={`px-4 py-3 border-b ${theme.cardBorder}`}><ThemeInput placeholder="Nom de la recette" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-serif text-xl w-full text-center" theme={theme}/></div>
+                 <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center cursor-pointer`} onClick={toggleSubRecipe}><span className={theme.text}>Est une sous-recette</span><ThemeSwitch checked={isSubRecipe} onChange={toggleSubRecipe} theme={theme}/></div>
+                 {!isSubRecipe && ( <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between`}><span className={theme.text}>Catégorie</span><select className={`bg-transparent ${theme.accent} outline-none`} value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>{[...categories].filter(c => c !== 'Sous-recette').sort().map(c=><option key={c} value={c}>{c}</option>)}</select></div> )}
+                 <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center`}><span className={theme.text}>Temps (min)</span><ThemeInput type="number" className="text-right w-20" value={form.prepTimeMinutes} onChange={e=>setForm({...form, prepTimeMinutes: parseFloat(e.target.value)})} theme={theme} /></div>
+                 <div className="px-4 py-3 flex justify-between items-center"><span className={theme.text}>Rendement (pcs)</span><ThemeInput type="number" className="text-right w-20" value={form.yieldCount} onChange={e=>setForm({...form, yieldCount: parseFloat(e.target.value)})} theme={theme} /></div>
+              </ThemeListGroup>
 
-                 {!isSubRecipe && (
-                    <div className="px-4 py-3 border-b border-gray-100 flex justify-between">
-                        <span>Catégorie</span>
-                        <select className="bg-transparent text-ios-blue outline-none" value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>
-                        {[...categories].filter(c => c !== 'Sous-recette').sort((a,b) => a.localeCompare(b)).map(c=><option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                 )}
+              <ThemeListGroup title="Allergènes" theme={theme}>
+                   <div className="p-4 flex flex-wrap gap-2">
+                      {PREDEFINED_ALLERGENS.map(a => ( <button key={a} onClick={() => toggleAllergen(a)} className={`px-3 py-1 rounded-full text-xs font-bold uppercase transition-all ${form.allergens.includes(a) ? `${theme.accentBg} ${theme.id==='luxury'?'text-black':'text-white'}` : `${theme.id==='luxury'?'bg-white/5':'bg-gray-100'} ${theme.textSec}`}`}>{a}</button> ))}
+                   </div>
+              </ThemeListGroup>
 
-                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                    <span>Temps (min)</span>
-                    <IOSInput type="number" className="text-right w-20" value={form.prepTimeMinutes||''} onChange={e=>setForm({...form, prepTimeMinutes: parseFloat(e.target.value)})} />
-                 </div>
-                 <div className="px-4 py-3 flex justify-between items-center">
-                    <span>Rendement (pcs)</span>
-                    <IOSInput type="number" className="text-right w-20" value={form.yieldCount||''} onChange={e=>setForm({...form, yieldCount: parseFloat(e.target.value)})} />
-                 </div>
-              </IOSListGroup>
-              
-              <div className="text-[13px] uppercase text-ios-subtext font-semibold px-4 mb-2">Allergènes</div>
-              <div className="mx-4 bg-white rounded-xl p-4 shadow-sm mb-6">
-                  <div className="flex flex-wrap gap-2 mb-3">
-                      {PREDEFINED_ALLERGENS.map(allergen => {
-                          const isSelected = form.allergens.includes(allergen);
-                          return (
-                              <button 
-                                key={allergen}
-                                onClick={() => toggleAllergen(allergen)}
-                                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${isSelected ? 'bg-ios-blue text-white border-ios-blue' : 'bg-gray-50 text-gray-600 border-gray-200 active:bg-gray-100'}`}
-                              >
-                                  {allergen}
-                              </button>
-                          );
-                      })}
-                      {form.allergens.filter(a => !PREDEFINED_ALLERGENS.includes(a)).map(custom => (
-                          <button 
-                            key={custom}
-                            onClick={() => toggleAllergen(custom)}
-                            className="px-3 py-1.5 rounded-full text-sm font-medium border bg-ios-blue text-white border-ios-blue"
-                          >
-                              {custom} <span className="opacity-50 ml-1">×</span>
-                          </button>
-                      ))}
-                  </div>
-                  <div className="flex gap-2 items-center pt-2 border-t border-gray-100">
-                      <input 
-                        className="flex-1 bg-gray-50 rounded px-2 py-1.5 text-sm outline-none border border-transparent focus:border-ios-blue focus:bg-white transition-colors"
-                        placeholder="Autre allergène..."
-                        value={customAllergen}
-                        onChange={e => setCustomAllergen(e.target.value)}
-                      />
-                      <button onClick={addCustomAllergen} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-gray-600 active:bg-ios-blue active:text-white transition-colors">
-                          <Plus size={16} />
-                      </button>
-                  </div>
-              </div>
-
-              <div className="flex items-center justify-between px-4">
-                 <div className="text-[13px] uppercase text-ios-subtext font-semibold">Composition</div>
-                 <div className="flex gap-2">
-                    <button onClick={()=>{setAddMode('ing');setSearchQuery('');}} className="text-ios-blue text-sm font-bold bg-blue-100 px-3 py-1 rounded-full">+ Ingr.</button>
-                    <button onClick={()=>{setAddMode('rec');setSearchQuery('');}} className="text-ios-gold text-sm font-bold bg-yellow-100 px-3 py-1 rounded-full text-yellow-700">+ Recette</button>
-                 </div>
-              </div>
-
-              <IOSListGroup>
-                 {form.ingredients.length === 0 && <div className="p-4 text-center text-gray-400 italic">Aucun ingrédient</div>}
+              <div className="flex justify-between items-center px-4"><h3 className={`${theme.fontHead} text-lg ${theme.text}`}>Composition</h3><div className="flex gap-2"><button onClick={()=>{setAddMode('ing');setSearchQuery('');}} className={`px-3 py-1 rounded-full border ${theme.id==='luxury'?'border-lux-gold/30 text-lux-gold':'border-ios-blue text-ios-blue'} text-xs font-bold uppercase`}>+ Ingr.</button><button onClick={()=>{setAddMode('rec');setSearchQuery('');}} className={`px-3 py-1 rounded-full border ${theme.id==='luxury'?'border-white/30 text-white':'border-gray-300 text-gray-600'} text-xs font-bold uppercase`}>+ Recette</button></div></div>
+              <ThemeListGroup theme={theme}>
+                 {form.ingredients.length === 0 && <div className={`p-4 text-center ${theme.textSec} text-sm`}>Vide</div>}
                  {form.ingredients.map((item, idx) => {
                     const isRec = !!item.recipeId;
                     const ref = isRec ? recipes.find(r=>r.id===item.recipeId) : ingredients.find(i=>i.id===item.ingredientId);
                     return (
-                       <div key={idx} className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                          <div>
-                             <div className="font-medium text-sm">{ref?.name || '???'}</div>
-                             {isRec && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded">Sous-recette</span>}
-                          </div>
-                          <div className="flex items-center gap-2">
-                             <IOSInput type="number" className="text-right w-16 bg-gray-100 rounded px-1" value={item.quantity||''} onChange={e=>{const n=[...form.ingredients];n[idx].quantity=parseFloat(e.target.value);setForm({...form,ingredients:n})}} />
-                             <span className="text-xs text-gray-500 w-6">{!isRec && ref?.unit==='pce'?'pce':'g'}</span>
-                             <button onClick={()=>setForm({...form, ingredients: form.ingredients.filter((_,i)=>i!==idx)})}><Trash2 size={16} className="text-red-300"/></button>
-                          </div>
-                       </div>
+                        <div key={idx} className={`flex justify-between items-center px-4 py-3 border-b ${theme.cardBorder} last:border-0`}>
+                            <span className={`${theme.textSec} text-sm`}>{ref?.name}</span>
+                            <div className="flex items-center gap-2">
+                                <input className={`w-16 bg-transparent text-right rounded p-1 text-sm outline-none border ${theme.cardBorder} ${theme.text}`} type="number" value={item.quantity} onChange={e=>{const n=[...form.ingredients];n[idx].quantity=parseFloat(e.target.value);setForm({...form,ingredients:n})}} />
+                                <span className={`text-xs ${theme.textSec} w-6`}>{!isRec && ref?.unit==='pce'?'pce':'g'}</span>
+                                <button onClick={()=>setForm({...form, ingredients: form.ingredients.filter((_,i)=>i!==idx)})}><Trash2 size={14} className="text-red-500"/></button>
+                            </div>
+                        </div>
                     )
                  })}
-              </IOSListGroup>
+              </ThemeListGroup>
+              
+              <ThemeListGroup title="Préparation" theme={theme}><textarea className={`w-full h-32 p-4 bg-transparent ${theme.text} outline-none resize-none`} placeholder="Instructions..." value={form.instructions || ''} onChange={e => setForm({...form, instructions: e.target.value})}/></ThemeListGroup>
 
-              {addMode && (
-                 <div className="fixed inset-0 z-[60] bg-ios-bg flex flex-col animate-slide-up">
-                    <div className="bg-white/90 backdrop-blur border-b pt-safe px-4 py-3 flex justify-between items-center shrink-0 z-20">
-                       <h3 className="font-bold text-lg">Ajouter {addMode==='ing'?'Ingrédient':'Recette'}</h3>
-                       <button onClick={()=>setAddMode(null)} className="text-ios-blue font-bold text-[17px]">Fermer</button>
-                    </div>
-                    <div className="px-4 py-3 bg-white border-b shrink-0 z-10">
-                       <div className="bg-gray-100 rounded-xl px-3 py-2 flex items-center gap-2">
-                          <Search size={18} className="text-gray-500" />
-                          <input 
-                            className="bg-transparent outline-none w-full text-[17px]" 
-                            placeholder="Rechercher..." 
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                          />
-                       </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 pb-safe bg-ios-bg">
-                       <div className="space-y-2">
-                          {(addMode==='ing' 
-                            ? [...ingredients] 
-                            : [...recipes].filter(r=>r.id!==form.id)
-                           )
-                           .filter(x => x.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                           .sort((a,b)=>a.name.localeCompare(b.name))
-                           .map(x => (
-                             <div key={x.id} onClick={()=>{setForm({...form, ingredients: [...form.ingredients, addMode==='ing'?{ingredientId:x.id,quantity:0}:{recipeId:x.id,quantity:0}]});setAddMode(null)}} className="p-4 bg-white rounded-xl shadow-sm font-medium active:bg-blue-50 cursor-pointer border border-gray-100">
-                                {x.name}
-                             </div>
-                          ))}
-                          {(addMode==='ing' ? ingredients : recipes.filter(r=>r.id!==form.id)).filter(x => x.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                              <div className="text-center text-gray-400 py-10 italic">Aucun résultat</div>
-                           )}
-                       </div>
-                    </div>
-                 </div>
-              )}
-
-              <IOSListGroup title="Préparation / Étapes">
-                 <textarea 
-                    className="w-full h-40 p-4 bg-white text-[17px] outline-none resize-none leading-relaxed"
-                    placeholder="Écrivez les étapes de la recette ici..."
-                    value={form.instructions || ''}
-                    onChange={e => setForm({...form, instructions: e.target.value})}
-                 />
-              </IOSListGroup>
-
-              <IOSListGroup title="Conditionnement">
-                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between">
-                    <span className="text-sm">Papillote</span>
-                    <select className="bg-transparent text-ios-blue outline-none w-32 text-right text-sm" value={form.foilId||''} onChange={e=>setForm({...form, foilId: e.target.value})}><option value="">Aucune</option>{foils.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select>
-                 </div>
-                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                    <span className="text-sm">Nb Boîtes</span>
-                    <IOSInput type="number" placeholder="ex: 10" className="text-right w-24" value={form.unitCount||''} onChange={e=>setForm({...form, unitCount: parseFloat(e.target.value)})} />
-                 </div>
+              <ThemeListGroup title="Conditionnement" theme={theme}>
+                 <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between`}><span className={theme.text}>Papillote</span><select className={`bg-transparent ${theme.accent} outline-none w-32 text-right text-sm`} value={form.foilId||''} onChange={e=>setForm({...form, foilId: e.target.value})}><option value="">Aucune</option>{foils.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></div>
+                 <div className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center`}><span className={theme.text}>Nb Boîtes</span><ThemeInput type="number" placeholder="ex: 10" className="text-right w-24" value={form.unitCount} onChange={e=>setForm({...form, unitCount: parseFloat(e.target.value)})} theme={theme} /></div>
                  {['containerId','labelId','decorationId'].map(field => {
                      const list = field.startsWith('c')?containers:(field.startsWith('l')?labels:decorations);
                      const lab = field.startsWith('c')?'Contenant':(field.startsWith('l')?'Étiquette':'Déco');
-                     return (
-                        <div key={field} className="px-4 py-3 border-b border-gray-100 flex justify-between">
-                           <span className="text-sm text-gray-600">{lab}</span>
-                           <select className="bg-transparent text-ios-blue outline-none w-32 text-right text-sm" value={form[field]||''} onChange={e=>setForm({...form, [field]: e.target.value})}><option value="">-</option>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
-                        </div>
-                     )
+                     return ( <div key={field} className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between`}><span className={theme.text}>{lab}</span><select className={`bg-transparent ${theme.accent} outline-none w-32 text-right text-sm`} value={form[field]||''} onChange={e=>setForm({...form, [field]: e.target.value})}><option value="">-</option>{list.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div> )
                  })}
-                 <div className="px-4 py-3 flex justify-between items-center">
-                    <span className="text-sm">Extra (€)</span>
-                    <IOSInput type="number" placeholder="ex: 0.50" className="text-right w-24" value={form.extraCost||''} onChange={e=>setForm({...form, extraCost: parseFloat(e.target.value)})} />
-                 </div>
-              </IOSListGroup>
+                 <div className="px-4 py-3 flex justify-between items-center"><span className={theme.text}>Extra (€)</span><ThemeInput type="number" placeholder="ex: 0.50" className="text-right w-24" value={form.extraCost} onChange={e=>setForm({...form, extraCost: parseFloat(e.target.value)})} theme={theme} /></div>
+              </ThemeListGroup>
 
-              <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl mb-6">
-                 <div className="text-center mb-4 text-white/50 text-xs uppercase font-bold">Analyse Financière</div>
-                 
-                 <div className="flex justify-between items-center mb-2 border-b border-white/10 pb-4">
-                    <div>
-                        <div className="text-2xl font-bold text-white">{formatCurrency(sellingPriceKg)}</div>
-                        <div className="text-xs text-white/70">Prix Vente / kg</div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-2xl font-bold text-white">{formatCurrency(sellingPriceUnit)}</div>
-                        <div className="text-xs text-white/70">Prix Vente / pièce</div>
-                    </div>
+              {addMode && (
+                 <div className={`fixed inset-0 z-[70] ${theme.bg} flex flex-col animate-slide-up`}>
+                    <div className={`p-4 border-b ${theme.cardBorder} flex items-center gap-3`}><Search className={theme.textSec} size={20}/><input className={`bg-transparent ${theme.text} text-lg flex-1 outline-none`} placeholder="Chercher..." autoFocus value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /><button onClick={()=>setAddMode(null)} className={`${theme.accent} font-bold`}>Fermer</button></div>
+                    <div className="flex-1 overflow-y-auto p-4">{(addMode==='ing' ? ingredients : recipes.filter(r=>r.id!==form.id)).filter(x => x.name.toLowerCase().includes(searchQuery.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name)).map(x => ( <div key={x.id} onClick={()=>{setForm({...form, ingredients: [...form.ingredients, addMode==='ing'?{ingredientId:x.id,quantity:0}:{recipeId:x.id,quantity:0}]});setAddMode(null)}} className={`p-4 mb-2 ${theme.card} rounded-lg active:opacity-70 cursor-pointer`}><div className={`${theme.text} font-medium`}>{x.name}</div></div> ))}</div>
                  </div>
-
-                 <div className="text-center mb-6 pb-2 border-b border-white/10">
-                    <div className="text-white/70 text-[10px] uppercase tracking-wide mb-1">Prix Vente Total : ((Matière + Emballage + Perte) x Marge) + Main d'œuvre</div>
-                    <div className="text-xl font-bold text-white">{formatCurrency(sellingPriceBatch)}</div>
-                 </div>
-
-                 <div className="grid grid-cols-2 gap-y-4 gap-x-4 text-sm">
-                     <div><div className="text-white/50 text-xs">Matière</div><div>{formatCurrency(metrics.mat)}</div></div>
-                     <div><div className="text-white/50 text-xs">Main d'œuvre</div><div>{formatCurrency(metrics.labor)}</div></div>
-                     <div><div className="text-white/50 text-xs">Emballage</div><div>{formatCurrency(metrics.pack)}</div></div>
-                     <div><div className="text-white/50 text-xs">Perte ({settings.wastePercentage}%)</div><div>{formatCurrency(metrics.waste)}</div></div>
-                     
-                     <div className="col-span-2 border-t border-white/10 my-1"></div>
-                     
-                     <div><div className="text-white/50 text-xs">Coût Production (Total)</div><div>{formatCurrency(metrics.total)}</div></div>
-                     <div><div className="text-white/50 text-xs">Poids Total</div><div>{(metrics.weight/1000).toFixed(2)} kg</div></div>
-                     
-                     <div className="col-span-2 pt-2 border-t border-white/10 flex justify-between items-center mt-1">
-                        <div className="text-white/70 text-xs">Coût Revient / kg</div>
-                        <div className="font-bold">{formatCurrency(metrics.weight > 0 ? metrics.total / (metrics.weight/1000) : 0)}</div>
-                     </div>
-                 </div>
-              </div>
-
-              {onDelete && form.id!=='new' && (
-                 <div className="mb-12">
-                     <button 
-                        type="button" 
-                        onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
-                        className="w-full mx-4 mb-3 bg-white text-ios-blue border border-ios-blue font-bold py-3 rounded-xl text-center shadow-sm cursor-pointer active:scale-[0.98] transition-transform block"
-                     >
-                        Dupliquer la recette
-                     </button>
-
-                     <button 
-                        type="button" 
-                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                        className="w-full mx-4 bg-ios-red text-white font-bold py-3 rounded-xl text-center shadow cursor-pointer active:scale-[0.98] transition-transform block"
-                     >
-                        Supprimer la recette
-                     </button>
-                 </div>
+              )}
+              {onDelete && form.id!=='new' && ( 
+                  <div className="space-y-3 pb-8">
+                    <button onClick={(e)=>{e.stopPropagation(); onDuplicate();}} className={`w-full py-3 border ${theme.id==='luxury'?'border-lux-gold text-lux-gold':'border-ios-blue text-ios-blue'} font-bold rounded-xl uppercase tracking-widest text-xs`}>Dupliquer</button>
+                    <button onClick={(e)=>{e.stopPropagation(); onDelete();}} className="w-full py-3 bg-red-500/10 text-red-500 font-bold rounded-xl uppercase tracking-widest text-xs">Supprimer</button>
+                  </div>
               )}
            </div>
         </div>
       );
     };
 
-    // 3. Application Principale
     const App = () => {
       const [view, setView] = useState('dashboard');
-      const [ingredients, setIngredients] = useState([{id:'1',name:'Chocolat Noir',price:12.50,unit:'kg',category:'Chocolat'}]);
+      const [ingredients, setIngredients] = useState([{id:'1',name:'Chocolat Noir 70%',price:12.50,unit:'kg',category:'Chocolat'}]);
       const [recipes, setRecipes] = useState([]);
       const [settings, setSettings] = useState(DEFAULT_SETTINGS);
       const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
@@ -955,30 +601,25 @@
       
       const [viewingId, setViewingId] = useState(null); 
       const [editingId, setEditingId] = useState(null); 
-      const [editingIngredient, setEditingIngredient] = useState(null); 
+      const [editingIngredient, setEditingIngredient] = useState(null);
       const [recipeTab, setRecipeTab] = useState('main'); 
       const [filterCategory, setFilterCategory] = useState(null);
       const [showFilterMenu, setShowFilterMenu] = useState(false);
       const [dashboardSearch, setDashboardSearch] = useState('');
       const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
-      const requestConfirm = (title, message, action) => {
-         setAlertConfig({
-            isOpen: true, 
-            title, 
-            message, 
-            onConfirm: () => { action(); setAlertConfig(prev => ({...prev, isOpen: false})); }
-         });
-      };
+      const theme = THEMES[settings.theme] || THEMES.luxury;
 
+      const requestConfirm = (title, message, action) => { setAlertConfig({ isOpen: true, title, message, onConfirm: () => { action(); setAlertConfig(prev => ({...prev, isOpen: false})); } }); };
+      
       useEffect(() => {
-         const d = localStorage.getItem('choco_app_ios_v2');
+         const d = localStorage.getItem('choco_app_lux_pro');
          if(d) {
             try {
                 const p = JSON.parse(d);
                 if(p.ingredients) setIngredients(p.ingredients);
                 if(p.recipes) setRecipes(p.recipes);
-                if(p.settings) setSettings(p.settings);
+                if(p.settings) setSettings({...DEFAULT_SETTINGS, ...p.settings}); // Ensure defaults
                 if(p.categories) setCategories(p.categories);
                 if(p.containers) setContainers(p.containers);
                 if(p.labels) setLabels(p.labels);
@@ -987,232 +628,123 @@
             } catch(e) { console.error(e); }
          }
       }, []);
-
       useEffect(() => {
          const data = { ingredients, recipes, settings, categories, containers, labels, decorations, foils };
-         localStorage.setItem('choco_app_ios_v2', JSON.stringify(data));
+         localStorage.setItem('choco_app_lux_pro', JSON.stringify(data));
       }, [ingredients, recipes, settings, categories, containers, labels, decorations, foils]);
 
       const handleImport = (e) => {
-          const file = e.target.files && e.target.files[0];
-          if(!file) return;
+          const file = e.target.files[0]; if(!file) return;
           const r = new FileReader();
-          r.onload = (ev) => {
-             try {
-                const p = JSON.parse(ev.target.result);
-                if(p.ingredients) setIngredients(p.ingredients);
-                if(p.recipes) setRecipes(p.recipes);
-                if(p.settings) setSettings(p.settings);
-                if(p.categories) setCategories(p.categories);
-                if(p.containers) setContainers(p.containers);
-                if(p.labels) setLabels(p.labels);
-                if(p.decorations) setDecorations(p.decorations);
-                if(p.foils) setFoils(p.foils);
-                alert("Importation réussie !");
-             } catch(err) { alert("Erreur fichier invalide"); }
-          }
+          r.onload = (ev) => { try { const p = JSON.parse(ev.target.result); setIngredients(p.ingredients||[]); setRecipes(p.recipes||[]); setSettings({...DEFAULT_SETTINGS,...p.settings}); setContainers(p.containers||[]); setLabels(p.labels||[]); setDecorations(p.decorations||[]); setFoils(p.foils||[]); alert("Importé !"); } catch(err) { alert("Erreur"); } }
           r.readAsText(file);
-          e.target.value = '';
       };
+      const handleExport = () => { const blob = new Blob([localStorage.getItem('choco_app_lux_pro')], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `backup_choco_${new Date().toISOString().slice(0,10)}.json`; a.click(); }
 
-      const handleExport = () => {
-          const data = localStorage.getItem('choco_app_ios_v2');
-          const blob = new Blob([data], {type: 'application/json'});
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `backup_choco_${new Date().toISOString().slice(0,10)}.json`;
-          a.click();
-      }
-
-      // --- GROUPE LES RECETTES PAR CATEGORIE POUR LE DASHBOARD ---
       const groupedRecipes = useMemo(() => {
           const groups = {};
+          const hidden = settings.hiddenCategories || [];
           recipes.forEach(r => {
-              if (r.category === 'Sous-recette') return; // On masque les sous-recettes de l'accueil pour l'instant
+              if (r.category === 'Sous-recette') return; 
+              if (hidden.includes(r.category)) return;
               if (!groups[r.category]) groups[r.category] = [];
               groups[r.category].push(r);
           });
           return groups;
-      }, [recipes]);
+      }, [recipes, settings.hiddenCategories]);
+
+      const toggleCategoryVisibility = (cat) => {
+          const current = settings.hiddenCategories || [];
+          if (current.includes(cat)) setSettings({...settings, hiddenCategories: current.filter(c => c !== cat)}); else setSettings({...settings, hiddenCategories: [...current, cat]});
+      };
 
       const renderContent = () => {
          if (view === 'dashboard') {
             return (
-               <div className="pb-32">
-                  <IOSHeader 
-                    title="Accueil" 
-                    subtitle={settings.chefName} 
-                    transparent={false} 
-                    rightAction={
-                        <button onClick={() => { setView('recipes'); setEditingId('new'); }} className="bg-ios-blue text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md active:scale-95 transition-transform">
-                             <Plus size={20} />
-                        </button>
-                    }
-                  />
+               <div className="pb-32 animate-fade-in pt-safe px-6">
+                  {theme.id === 'standard' || theme.id === 'choco' ? (
+                      <div className="mt-6 mb-6">
+                        <h1 className={`${theme.fontHead} ${theme.appTitleSize} font-bold ${theme.text} tracking-tight mb-1`}>{theme.id === 'choco' ? 'Choco prix' : 'Accueil'}</h1>
+                        {theme.id === 'choco' && <div className={`${theme.textSec} text-sm font-medium tracking-wide uppercase mt-1`}>Atelier Gourmand</div>}
+                        {theme.id === 'standard' && <p className={`${theme.textSec} font-medium`}>{settings.chefName}</p>}
+                      </div>
+                  ) : (
+                      <div className="flex justify-between items-center mb-6 mt-4"><h1 className={`${theme.fontHead} text-4xl font-bold ${theme.text}`}>Choco prix</h1><div className={`w-10 h-10 rounded-full border ${theme.cardBorder} flex items-center justify-center ${theme.accent}`}><ShoppingBag size={20} /></div></div>
+                  )}
                   
-                  <div className="px-4 mt-2 mb-6">
-                     <div className="bg-gray-200/50 rounded-xl px-3 py-2.5 flex items-center gap-2">
-                        <Search size={18} className="text-gray-500" />
-                        <input 
-                           className="bg-transparent outline-none w-full text-[17px] placeholder-gray-500" 
-                           placeholder="Rechercher une recette..." 
-                           value={dashboardSearch}
-                           onChange={(e) => setDashboardSearch(e.target.value)}
-                        />
-                        {dashboardSearch && (
-                           <button onClick={()=>setDashboardSearch('')}><X size={18} className="text-gray-500"/></button>
-                        )}
-                     </div>
-                  </div>
+                  <div className={`${theme.searchBg || theme.card} rounded-xl px-3 py-2.5 flex items-center gap-2 mb-8 shadow-sm`}><Search size={18} className={theme.textSec} /><input className={`bg-transparent outline-none w-full ${theme.text} placeholder-gray-500`} placeholder="Rechercher une recette..." value={dashboardSearch} onChange={(e) => setDashboardSearch(e.target.value)}/>{dashboardSearch && ( <button onClick={()=>setDashboardSearch('')}><X size={18} className={theme.textSec}/></button> )}</div>
 
                   {dashboardSearch.length > 0 ? (
-                     <div className="mt-4">
-                        <IOSListGroup title="Résultats">
-                           {recipes
-                              .filter(r => r.name.toLowerCase().includes(dashboardSearch.toLowerCase()))
-                              .sort((a,b) => a.name.localeCompare(b.name))
-                              .map((r, i) => (
-                              <IOSListItem 
-                                 key={r.id} 
-                                 label={r.name} 
-                                 value={r.category}
-                                 isLast={false} 
-                                 onClick={() => {
-                                    setViewingId(r.id);
-                                    setDashboardSearch('');
-                                 }}
-                              />
-                           ))}
-                        </IOSListGroup>
-                     </div>
+                      <div className="grid grid-cols-2 gap-4">
+                           {recipes.filter(r => r.name.toLowerCase().includes(dashboardSearch.toLowerCase())).map(r => {
+                              const metrics = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
+                              const pack = (containers.find(c=>c.id===r.containerId)?.price||0) + (labels.find(l=>l.id===r.labelId)?.price||0) + (decorations.find(d=>d.id===r.decorationId)?.price||0) + ((foils.find(f=>f.id===r.foilId)?.price||0)*r.yieldCount) + (r.extraCost||0);
+                              const goods = metrics.materialCost + metrics.wasteCost + pack;
+                              const sellingPrice = (goods * (1 + settings.defaultMargin / 100)) + metrics.laborCost;
+                              return <RecipeCard key={r.id} recipe={r} priceKg={formatCurrency(metrics.totalWeight > 0 ? sellingPrice / (metrics.totalWeight/1000) : 0)} priceUnit={formatCurrency(r.yieldCount > 0 ? sellingPrice / r.yieldCount : 0)} onClick={() => setViewingId(r.id)} theme={theme} />;
+                           })}
+                      </div>
                   ) : (
-                     <div className="animate-fade-in space-y-8 mt-4">
-                        {/* LISTE PAR CATEGORIES (STYLE PODCASTS) */}
+                      <div>
+                        {Object.keys(groupedRecipes).length === 0 && recipes.length === 0 && (
+                          <div className={`text-center py-20 opacity-50 ${theme.text}`}>
+                              <p className={`${theme.fontHead} text-xl mb-4`}>Bienvenue</p>
+                              <p className="text-sm">Commencez par ajouter des ingrédients,<br/>puis créez votre première recette.</p>
+                          </div>
+                        )}
+
                         {Object.keys(groupedRecipes).sort().map(cat => (
-                            <div key={cat} className="flex flex-col">
-                                <div className="px-4 flex items-center justify-between mb-3">
-                                    <h2 className="text-xl font-bold text-black">{cat}</h2>
-                                    <ChevronRight size={18} className="text-gray-400" />
+                            <div key={cat} className="mb-10">
+                                <div className="px-1 mb-3 flex justify-between items-end">
+                                    <h3 className={`${theme.id==='standard' || theme.id === 'choco' ? 'font-bold text-xl' : 'font-serif text-xl'} ${theme.text}`}>{cat}</h3>
+                                    {theme.id === 'luxury' && <button onClick={()=>{setView('recipes');setFilterCategory(cat);}} className={`text-xs ${theme.accent} font-bold uppercase tracking-wider`}>Voir tout</button>}
                                 </div>
-                                <div className="flex overflow-x-auto px-4 gap-4 pb-4 no-scrollbar snap-x">
-                                    {groupedRecipes[cat].map(recipe => (
-                                        <div 
-                                            key={recipe.id} 
-                                            className="min-w-[160px] w-[160px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform"
-                                            onClick={() => setViewingId(recipe.id)}
-                                        >
-                                            <div className="aspect-square w-full rounded-xl bg-gray-100 shadow-md overflow-hidden relative">
-                                                {(recipe.photoUrl || recipe.photo) ? (
-                                                    <img src={recipe.photoUrl || recipe.photo} className="w-full h-full object-cover" alt={recipe.name} />
-                                                ) : (
-                                                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200">
-                                                        <ChefHat size={32} className="text-gray-300 mb-2" />
-                                                    </div>
-                                                )}
+                                <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar snap-x -mx-6 px-6">
+                                    {groupedRecipes[cat].map(r => {
+                                        const metrics = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
+                                        const pack = (containers.find(c=>c.id===r.containerId)?.price||0) + (labels.find(l=>l.id===r.labelId)?.price||0) + (decorations.find(d=>d.id===r.decorationId)?.price||0) + ((foils.find(f=>f.id===r.foilId)?.price||0)*r.yieldCount) + (r.extraCost||0);
+                                        const goods = metrics.materialCost + metrics.wasteCost + pack;
+                                        const sellingPrice = (goods * (1 + settings.defaultMargin / 100)) + metrics.laborCost;
+                                        return (
+                                            <div key={r.id} className="min-w-[160px] w-[160px] snap-start h-full">
+                                                <RecipeCard recipe={r} priceKg={formatCurrency(metrics.totalWeight > 0 ? sellingPrice / (metrics.totalWeight/1000) : 0)} priceUnit={formatCurrency(r.yieldCount > 0 ? sellingPrice / r.yieldCount : 0)} onClick={() => setViewingId(r.id)} theme={theme} />
                                             </div>
-                                            <div>
-                                                <h3 className="text-[15px] font-semibold text-black leading-tight line-clamp-2">{recipe.name}</h3>
-                                                <p className="text-[13px] text-gray-500 mt-0.5">{recipe.yieldCount} pcs</p>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
-                                <div className="h-px bg-gray-200 mx-4 mt-2"></div>
                             </div>
                         ))}
-                        
-                        {Object.keys(groupedRecipes).length === 0 && (
-                            <div className="text-center py-10 text-gray-400">
-                                Aucune recette pour le moment.
-                            </div>
-                        )}
-                     </div>
+                      </div>
                   )}
                </div>
             )
          }
-         // ... Le reste (recipes, ingredients, settings) reste le même
          if (view === 'recipes') {
-             const filteredRecipes = recipes
-                 .filter(r => recipeTab === 'sub' ? r.category === 'Sous-recette' : r.category !== 'Sous-recette')
-                 .filter(r => filterCategory ? r.category === filterCategory : true)
-                 .sort((a,b) => a.name.localeCompare(b.name));
-
-             const leftAction = recipeTab === 'main' ? (
-                <button onClick={() => setShowFilterMenu(true)} className={`flex items-center justify-center w-10 h-10 -ml-2 rounded-full active:bg-gray-100 ${filterCategory ? 'text-ios-blue' : 'text-ios-blue'}`}>
-                   <Filter size={24} className={filterCategory ? "fill-current" : ""} strokeWidth={2} />
-                </button>
-             ) : null;
-
+             const filtered = recipes.filter(r => recipeTab === 'sub' ? r.category === 'Sous-recette' : r.category !== 'Sous-recette').filter(r => filterCategory ? r.category === filterCategory : true).sort((a,b) => a.name.localeCompare(b.name));
              return (
-                 <div className="pb-32">
-                    <IOSHeader title="Liste" leftAction={leftAction} rightAction={<button onClick={()=>setEditingId('new')} className="text-ios-blue"><Plus size={24}/></button>} />
-                    <div className="px-4 pb-4">
-                       <div className="bg-[#e3e3e8] p-0.5 rounded-lg flex h-8 relative">
-                          <button onClick={()=>{setRecipeTab('main'); setFilterCategory(null);}} className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='main'?'bg-white shadow text-black':'text-gray-500'}`}>Recettes Principales</button>
-                          <button onClick={()=>{setRecipeTab('sub'); setFilterCategory(null);}} className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='sub'?'bg-white shadow text-black':'text-gray-500'}`}>Sous-recettes</button>
+                 <div className="pb-32 pt-safe">
+                     <ThemeHeader title="Liste" leftAction={<button onClick={() => setShowFilterMenu(true)} className={`${filterCategory?theme.accent:theme.textSec}`}><Filter size={24}/></button>} rightAction={<button onClick={()=>setEditingId('new')}><Plus size={24}/></button>} theme={theme} />
+                     <div className="px-4 pb-4">
+                       <div className={`${theme.card} p-1 rounded-lg flex h-9 relative shadow-sm`}>
+                          <button onClick={()=>{setRecipeTab('main'); setFilterCategory(null);}} className={`flex-1 rounded-md text-xs font-bold uppercase transition-all ${recipeTab==='main'?theme.tabActive:theme.tabInactive}`}>Recettes</button>
+                          <button onClick={()=>{setRecipeTab('sub'); setFilterCategory(null);}} className={`flex-1 rounded-md text-xs font-bold uppercase transition-all ${recipeTab==='sub'?theme.tabActive:theme.tabInactive}`}>Sous-recettes</button>
                        </div>
                     </div>
-                    {filterCategory && (
-                       <div className="px-4 pb-3 flex items-center justify-between animate-fade-in">
-                           <div className="text-sm font-semibold text-black">Filtre : <span className="text-ios-blue">{filterCategory}</span></div>
-                           <button onClick={()=>setFilterCategory(null)} className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full flex items-center gap-1"><X size={12}/> Effacer</button>
-                       </div>
-                    )}
-                    {filteredRecipes.length === 0 ? <div className="p-10 text-center text-gray-400">Aucune recette trouvée</div> : (
-                       <IOSListGroup>
-                          {filteredRecipes.map(r => {
-                                const met = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
-                                const foil = foils.find(f=>f.id===r.foilId);
-                                const foilCost = (foil?.price||0)*r.yieldCount;
-                                const packUnit = (containers.find(c=>c.id===r.containerId)?.price||0) + (labels.find(l=>l.id===r.labelId)?.price||0) + (decorations.find(d=>d.id===r.decorationId)?.price||0);
-                                const packTotal = foilCost + (packUnit*(r.unitCount||0)) + (r.extraCost||0);
-                                const fullTotalCost = met.totalCost + packTotal;
-                                const goodsCost = met.materialCost + met.wasteCost + packTotal;
-                                const sellBatch = (goodsCost * (1 + settings.defaultMargin / 100)) + met.laborCost;
-                                const sellKg = met.totalWeight > 0 ? sellBatch / (met.totalWeight/1000) : 0;
-                                const sellUnit = r.yieldCount > 0 ? sellBatch / r.yieldCount : 0;
-                                const costPerKg = met.totalWeight > 0 ? fullTotalCost / (met.totalWeight/1000) : 0;
-
-                                return (
-                                   <SwipeRow key={r.id} onDelete={()=>{ requestConfirm("Supprimer la recette ?", `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`, () => setRecipes(recipes.filter(x => x.id !== r.id))); }}>
-                                      <div className="pl-4 pr-4 py-3 flex w-full items-center gap-2 active:bg-gray-100 transition-colors" onClick={()=>setViewingId(r.id)}>
-                                         {/* MINIATURE DANS LISTE */}
-                                         <div className="w-10 h-10 rounded bg-gray-200 shrink-0 overflow-hidden">
-                                             {(r.photoUrl || r.photo) ? <img src={r.photoUrl || r.photo} className="w-full h-full object-cover"/> : <ChefHat className="w-full h-full p-2 text-gray-400"/>}
-                                         </div>
-                                         <div className="flex-1 min-w-0">
-                                            <div className="font-semibold truncate text-[17px]">{r.name}</div>
-                                            <div className="text-[14px] text-gray-500">{r.category}</div>
-                                         </div>
-                                         <div className="flex flex-col items-end min-w-[120px] border-l border-gray-100 pl-2 ml-2 text-right">
-                                            <div className="text-ios-blue font-bold text-[14px]">Vente {formatCurrency(sellKg)} / kg</div>
-                                            <div className="text-[11px] text-green-600 font-medium">Unit. {formatCurrency(sellUnit)}</div>
-                                            <div className="text-[11px] text-gray-500 font-medium">Coût {formatCurrency(costPerKg)} / kg</div>
-                                         </div>
-                                         <ChevronRight size={20} className="text-ios-subtext opacity-30" />
-                                      </div>
-                                   </SwipeRow>
-                                );
-                             })}
-                       </IOSListGroup>
-                    )}
+                    {filterCategory && <div className={`px-4 pb-3 text-sm ${theme.accent} flex justify-between items-center`}><span>Filtre: {filterCategory}</span><button onClick={()=>setFilterCategory(null)}><X size={14}/></button></div>}
+                    <div className={`mx-4 ${theme.card} rounded-xl overflow-hidden`}>
+                        {filtered.map(r => (
+                             <SwipeRow key={r.id} onDelete={()=>{ requestConfirm("Supprimer", `Supprimer ${r.name} ?`, () => setRecipes(recipes.filter(x => x.id !== r.id))); }} theme={theme}>
+                                <ThemeListItem label={r.name} value={r.category} onClick={()=>setViewingId(r.id)} isLast={false} theme={theme} />
+                             </SwipeRow>
+                        ))}
+                    </div>
                     {showFilterMenu && (
-                        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setShowFilterMenu(false)}>
-                            <div className="bg-white w-full sm:w-[320px] sm:rounded-2xl rounded-t-2xl overflow-hidden shadow-2xl animate-slide-up pb-safe" onClick={e => e.stopPropagation()}>
-                                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur">
-                                    <span className="font-bold text-[17px]">Filtrer par catégorie</span>
-                                    <button onClick={() => setShowFilterMenu(false)} className="bg-gray-200 rounded-full p-1 text-gray-500"><X size={16}/></button>
-                                </div>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowFilterMenu(false)}>
+                            <div className={`${theme.card} w-[300px] rounded-2xl overflow-hidden`} onClick={e => e.stopPropagation()}>
+                                <div className={`p-4 border-b ${theme.cardBorder} ${theme.fontHead} text-lg ${theme.text}`}>Filtrer par catégorie</div>
                                 <div className="max-h-[60vh] overflow-y-auto">
-                                     <div onClick={() => { setFilterCategory(null); setShowFilterMenu(false); }} className={`px-4 py-3.5 border-b border-gray-100 active:bg-gray-100 cursor-pointer flex justify-between items-center ${filterCategory === null ? 'text-ios-blue font-semibold bg-blue-50/50' : ''}`}>
-                                        <span className="text-[17px]">Tout afficher</span>{filterCategory === null && <span className="text-ios-blue font-bold">✓</span>}
-                                     </div>
-                                     {[...categories].filter(c => c !== 'Sous-recette').sort().map(cat => (
-                                         <div key={cat} onClick={() => { setFilterCategory(cat); setShowFilterMenu(false); }} className={`px-4 py-3.5 border-b border-gray-100 active:bg-gray-100 cursor-pointer flex justify-between items-center ${filterCategory === cat ? 'text-ios-blue font-semibold bg-blue-50/50' : ''}`}>
-                                            <span className="text-[17px]">{cat}</span>{filterCategory === cat && <span className="text-ios-blue font-bold">✓</span>}
-                                         </div>
-                                     ))}
+                                     <div onClick={() => { setFilterCategory(null); setShowFilterMenu(false); }} className={`px-4 py-3 border-b ${theme.cardBorder} ${theme.text} active:opacity-70`}>Tout afficher</div>
+                                     {[...categories].filter(c => c !== 'Sous-recette').sort().map(cat => ( <div key={cat} onClick={() => { setFilterCategory(cat); setShowFilterMenu(false); }} className={`px-4 py-3 border-b ${theme.cardBorder} ${theme.text} active:opacity-70`}>{cat}</div> ))}
                                 </div>
                             </div>
                         </div>
@@ -1221,111 +753,79 @@
              )
          }
          if (view === 'ingredients') {
-             const sortedIngredients = [...ingredients].sort((a,b) => a.name.localeCompare(b.name));
              return (
-                <div className="pb-32">
-                   <IOSHeader title="Ingrédients" rightAction={<button onClick={()=>setEditingIngredient({id: 'new', name: '', price: '', unit: 'kg', category: 'Autre'})} className="text-ios-blue min-w-[44px] flex items-center justify-end"><Plus size={24}/></button>} />
-                   <IOSListGroup>
-                      {sortedIngredients.map((ing) => (
-                         <SwipeRow key={ing.id} onDelete={()=>{requestConfirm("Supprimer l'ingrédient ?", `Voulez-vous supprimer "${ing.name}" ?`, () => setIngredients(ingredients.filter(x => x.id !== ing.id)));}}>
-                             <IOSListItem label={ing.name} value={`${formatCurrency(ing.price)} / ${ing.unit}`} onClick={() => setEditingIngredient(ing)} isLast={false} />
-                         </SwipeRow>
-                      ))}
-                   </IOSListGroup>
-                </div>
+                 <div className="pb-32 pt-safe">
+                     <ThemeHeader title="Ingrédients" rightAction={<button onClick={()=>setEditingIngredient({id: 'new', name: '', price: '', unit: 'kg', category: 'Autre'})}><Plus/></button>} theme={theme} />
+                     <div className={`mx-4 mt-4 ${theme.card} rounded-xl overflow-hidden shadow-sm`}>
+                        {ingredients.sort((a,b)=>a.name.localeCompare(b.name)).map(ing => (
+                            <SwipeRow key={ing.id} onDelete={()=>{requestConfirm("Supprimer", `Supprimer ${ing.name} ?`, () => setIngredients(ingredients.filter(x => x.id !== ing.id)));}} theme={theme}>
+                                <ThemeListItem label={ing.name} value={`${formatCurrency(ing.price)} / ${ing.unit}`} onClick={() => setEditingIngredient(ing)} theme={theme} />
+                            </SwipeRow>
+                        ))}
+                     </div>
+                 </div>
              )
          }
          if (view === 'settings') {
              return (
-                <div className="pb-32">
-                   <IOSHeader title="Réglages" />
-                   <IOSListGroup title="Général">
-                      <div className="px-4 py-3 flex justify-between border-b border-gray-100"><span>Nom Chef</span><IOSInput className="text-right" value={settings.chefName} onChange={e=>setSettings({...settings,chefName:e.target.value})} /></div>
-                      <div className="px-4 py-3 flex justify-between border-b border-gray-100"><span>Taux Horaire</span><IOSInput type="number" className="text-right" value={settings.hourlyRate} onChange={e=>setSettings({...settings,hourlyRate:parseFloat(e.target.value)})} /></div>
-                      <div className="px-4 py-3 flex justify-between"><span>Marge %</span><IOSInput type="number" className="text-right" value={settings.defaultMargin} onChange={e=>setSettings({...settings,defaultMargin:parseFloat(e.target.value)})} /></div>
-                   </IOSListGroup>
-                   <PackagingManager title="Contenants" items={containers} setItems={setContainers} />
-                   <PackagingManager title="Étiquettes" items={labels} setItems={setLabels} />
-                   <PackagingManager title="Décorations" items={decorations} setItems={setDecorations} />
-                   <PackagingManager title="Papillotes" items={foils} setItems={setFoils} />
-                   <IOSListGroup title="Données">
-                      <IOSListItem label="Exporter JSON" icon={Download} onClick={handleExport} />
-                      <div className="relative"><IOSListItem label="Importer JSON" icon={Upload} isLast /><input type="file" onChange={handleImport} accept=".json" className="absolute inset-0 w-full h-full opacity-0 z-50 cursor-pointer" /></div>
-                   </IOSListGroup>
-                   <div className="text-center p-6 text-ios-subtext text-xs">ChocoCost {APP_VERSION}</div>
+                <div className="pb-32 pt-safe">
+                   <ThemeHeader title="Réglages" theme={theme} />
+                   <div className="px-4 pb-4 mt-4">
+                       <ThemeListGroup title="Apparence" theme={theme}>
+                           {Object.values(THEMES).map(t => (
+                              <ThemeListItem 
+                                  key={t.id} 
+                                  label={t.name}
+                                  onClick={() => setSettings({...settings, theme: t.id})}
+                                  theme={theme}
+                                  value={settings.theme === t.id ? <Check size={20} className={theme.accent} /> : null}
+                              />
+                           ))}
+                       </ThemeListGroup>
+
+                       <ThemeListGroup title="Paramètres Généraux" theme={theme}>
+                          <div className={`px-4 py-3 flex justify-between border-b ${theme.cardBorder}`}><span className={theme.text}>Nom Chef</span><ThemeInput className="text-right" value={settings.chefName} onChange={e=>setSettings({...settings,chefName:e.target.value})} theme={theme} /></div>
+                          <div className={`px-4 py-3 flex justify-between border-b ${theme.cardBorder}`}><span className={theme.text}>Taux Horaire</span><ThemeInput type="number" className="text-right" value={settings.hourlyRate} onChange={e=>setSettings({...settings,hourlyRate:parseFloat(e.target.value)})} theme={theme} /></div>
+                          <div className="px-4 py-3 flex justify-between"><span className={theme.text}>Marge %</span><ThemeInput type="number" className="text-right" value={settings.defaultMargin} onChange={e=>setSettings({...settings,defaultMargin:parseFloat(e.target.value)})} theme={theme} /></div>
+                       </ThemeListGroup>
+                       <ThemeListGroup title="Affichage Accueil" theme={theme}>
+                           {categories.filter(c => c !== 'Sous-recette').sort().map(cat => (
+                               <div key={cat} className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center last:border-0`}><span className={theme.text}>{cat}</span><ThemeSwitch checked={!(settings.hiddenCategories || []).includes(cat)} onChange={() => toggleCategoryVisibility(cat)} theme={theme} /></div>
+                           ))}
+                       </ThemeListGroup>
+                       <PackagingManager title="Contenants" items={containers} setItems={setContainers} theme={theme} />
+                       <PackagingManager title="Étiquettes" items={labels} setItems={setLabels} theme={theme} />
+                       <PackagingManager title="Décorations" items={decorations} setItems={setDecorations} theme={theme} />
+                       <PackagingManager title="Papillotes" items={foils} setItems={setFoils} theme={theme} />
+                       <ThemeListGroup title="Données" theme={theme}>
+                          <ThemeListItem label="Exporter JSON" icon={Download} onClick={handleExport} theme={theme} />
+                          <div className="relative"><ThemeListItem label="Importer JSON" icon={Upload} isLast theme={theme} /><input type="file" onChange={handleImport} accept=".json" className="absolute inset-0 w-full h-full opacity-0 z-50 cursor-pointer" /></div>
+                       </ThemeListGroup>
+                   </div>
                 </div>
              )
          }
       }
 
-      const navItems = [
-         { id: 'dashboard', icon: LayoutDashboard, label: 'Accueil' },
-         { id: 'recipes', icon: ChefHat, label: 'Recettes' },
-         { id: 'ingredients', icon: List, label: 'Ingréd.' },
-         { id: 'settings', icon: Settings, label: 'Réglages' },
-      ];
-
       return (
-         <div className="h-full relative">
-            <IOSAlert isOpen={alertConfig.isOpen} title={alertConfig.title} message={alertConfig.message} onConfirm={alertConfig.onConfirm} onCancel={() => setAlertConfig(prev => ({...prev, isOpen: false}))} />
+         <div className={`h-full relative ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}>
+            <ThemeAlert isOpen={alertConfig.isOpen} title={alertConfig.title} message={alertConfig.message} onConfirm={alertConfig.onConfirm} onCancel={() => setAlertConfig(prev => ({...prev, isOpen: false}))} theme={theme} />
             
-            {/* VUES MODALES AU TOP NIVEAU */}
-            {viewingId && !editingId && (
-               <RecipeDetailView 
-                  recipe={recipes.find(r=>r.id===viewingId)}
-                  ingredients={ingredients} recipes={recipes} settings={settings}
-                  containers={containers} labels={labels} decorations={decorations} foils={foils}
-                  onBack={()=>setViewingId(null)}
-                  onEdit={()=>setEditingId(viewingId)}
-               />
-            )}
-            {editingId && (
-               <RecipeEditView 
-                  recipe={editingId==='new' ? {id:'new',name:'',category:'Confiserie',ingredients:[],prepTimeMinutes:0,yieldCount:1,extraCost:0,foilId:'',unitCount:0,containerId:'',labelId:'',decorationId:'', allergens: []} : recipes.find(r=>r.id===editingId)}
-                  ingredients={ingredients} recipes={recipes} categories={categories} settings={settings}
-                  containers={containers} labels={labels} decorations={decorations} foils={foils}
-                  onCancel={()=>setEditingId(null)}
-                  onSave={(r)=>{
-                     if(r.id==='new') setRecipes([...recipes, {...r, id:generateId()}]);
-                     else setRecipes(recipes.map(x=>x.id===r.id?r:x));
-                     setEditingId(null);
-                     if(r.id!=='new') setViewingId(r.id);
-                  }}
-                  onDelete={editingId!=='new' ? () => {requestConfirm("Supprimer la recette ?", "Cette action est irréversible.", () => {setRecipes(recipes.filter(r=>r.id!==editingId));setEditingId(null);setViewingId(null);});} : undefined}
-                  onDuplicate={editingId!=='new' ? () => {
-                     const original = recipes.find(r => r.id === editingId);
-                     if (original) {
-                        const newRecipe = {...original, id: generateId(), name: `${original.name} (Copie)`};
-                        setRecipes([...recipes, newRecipe]);
-                        setEditingId(null);
-                        alert(`Recette dupliquée : ${newRecipe.name}`);
-                     }
-                  } : undefined}
-               />
-            )}
-            {editingIngredient && (
-               <IngredientEditView
-                  ingredient={editingIngredient}
-                  categories={categories}
-                  onCancel={() => setEditingIngredient(null)}
-                  onSave={(ing) => {
-                     if (ing.id === 'new') setIngredients([...ingredients, { ...ing, id: generateId() }]);
-                     else setIngredients(ingredients.map(x => x.id === ing.id ? ing : x));
-                     setEditingIngredient(null);
-                  }}
-               />
-            )}
+            {viewingId && !editingId && <RecipeDetailView recipe={recipes.find(r=>r.id===viewingId)} ingredients={ingredients} recipes={recipes} settings={settings} containers={containers} labels={labels} decorations={decorations} foils={foils} onBack={()=>setViewingId(null)} onEdit={()=>setEditingId(viewingId)} theme={theme} />}
+            {editingId && <RecipeEditView recipe={editingId==='new'?{id:'new',name:'',category:'Chocolat',ingredients:[],allergens:[]}:recipes.find(r=>r.id===editingId)} ingredients={ingredients} recipes={recipes} categories={categories} settings={settings} containers={containers} labels={labels} decorations={decorations} foils={foils} onCancel={()=>setEditingId(null)} onSave={(r)=>{if(r.id==='new')setRecipes([...recipes,{...r,id:generateId()}]);else setRecipes(recipes.map(x=>x.id===r.id?r:x));setEditingId(null);}} onDelete={editingId!=='new'?()=>{requestConfirm("Supprimer", "Vraiment ?", ()=>{setRecipes(recipes.filter(x=>x.id!==editingId));setEditingId(null);setViewingId(null)})} : undefined} onDuplicate={()=>{ const original = recipes.find(r => r.id === editingId); if (original) { const newRecipe = {...original, id: generateId(), name: `${original.name} (Copie)`}; setRecipes([...recipes, newRecipe]); setEditingId(null); alert("Copié !"); } }} theme={theme} />}
+            {editingIngredient && <IngredientEditView ingredient={editingIngredient} categories={categories} onCancel={() => setEditingIngredient(null)} onSave={(ing) => { if (ing.id === 'new') setIngredients([...ingredients, { ...ing, id: generateId() }]); else setIngredients(ingredients.map(x => x.id === ing.id ? ing : x)); setEditingIngredient(null); }} theme={theme} />}
 
-            <main className="absolute inset-0 overflow-y-auto no-scrollbar bg-ios-bg pb-24">
-               {renderContent()}
-            </main>
-            <nav className="fixed bottom-0 w-full bg-[#f9f9f9]/90 backdrop-blur-xl border-t border-gray-300/50 pb-safe pt-2 flex justify-around z-50">
-               {navItems.map(item => (
-                  <button key={item.id} onClick={()=>setView(item.id)} className={`flex flex-col items-center w-16 ${view===item.id?'text-ios-blue':'text-gray-400'}`}>
-                     <item.icon size={26} strokeWidth={view===item.id?2.5:2} />
-                     <span className="text-[10px] font-medium mt-1">{item.label}</span>
-                  </button>
-               ))}
+            <main className="absolute inset-0 overflow-y-auto no-scrollbar pb-24">{renderContent()}</main>
+
+            <nav className={`fixed bottom-0 w-full ${theme.navBg} backdrop-blur-xl pb-safe h-[80px] z-50 transition-colors duration-300`}>
+               <div className="relative flex justify-between items-center px-8 h-full">
+                  <button onClick={()=>{setView('dashboard');setViewingId(null);}} className={`flex flex-col items-center gap-1 ${view==='dashboard' && !viewingId ? theme.accent : (theme.navIconInactive||'text-gray-500')}`}><LayoutDashboard strokeWidth={1.5} size={24} /></button>
+                  <button onClick={()=>{setView('ingredients');setViewingId(null);}} className={`flex flex-col items-center gap-1 ${view==='ingredients' && !viewingId ? theme.accent : (theme.navIconInactive||'text-gray-500')}`}><List strokeWidth={1.5} size={24} /></button>
+                  <div className="absolute left-1/2 -translate-x-1/2 -top-6"><button onClick={() => { setView('dashboard'); setEditingId('new'); setViewingId(null); }} className={`w-16 h-16 rounded-full ${theme.btnPrimary} shadow-glow flex items-center justify-center border-4 ${theme.id==='luxury'?'border-lux-black':'border-gray-50'} transform active:scale-95 transition-transform`}><Plus size={32} color={theme.id==='luxury'?'#121212':'white'} strokeWidth={2.5} /></button></div>
+                  <button onClick={()=>{setView('recipes');setViewingId(null);}} className={`flex flex-col items-center gap-1 ${view==='recipes' && !viewingId ? theme.accent : (theme.navIconInactive||'text-gray-500')}`}><ChefHat strokeWidth={1.5} size={24} /></button>
+                  <button onClick={()=>{setView('settings');setViewingId(null);}} className={`flex flex-col items-center gap-1 ${view==='settings' && !viewingId ? theme.accent : (theme.navIconInactive||'text-gray-500')}`}><Settings strokeWidth={1.5} size={24} /></button>
+               </div>
+               {theme.id==='luxury' && <div className="absolute top-0 left-8 right-8 h-[1px] bg-gradient-to-r from-transparent via-lux-gold/50 to-transparent"></div>}
             </nav>
          </div>
       );

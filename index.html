@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ChocoCost V1.08</title>
+  <title>ChocoCost V1.10</title>
   
   <!-- 1. STYLE (Tailwind) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -69,11 +69,11 @@
     import { createRoot } from 'react-dom/client';
     import { 
       LayoutDashboard, ChefHat, Settings, Plus, Trash2, Download, Upload, 
-      ChevronRight, List, X, Search, ChevronLeft, Filter
+      ChevronRight, List, X, Search, ChevronLeft, Filter, Camera, Image as ImageIcon, AlertTriangle, Link as LinkIcon
     } from 'lucide-react';
 
     // --- VERSION ---
-    const APP_VERSION = "V1.08";
+    const APP_VERSION = "V1.10";
 
     // --- DATA & UTILITAIRES ---
     const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -90,7 +90,36 @@
     };
     
     const DEFAULT_CATEGORIES = ['Chocolat', 'Sous-recette', 'Fruits Secs', 'Sucre', 'Crèmerie', 'Arômes', 'Confiserie', 'Pâte à tartiner'];
-    
+    const PREDEFINED_ALLERGENS = ['Gluten', 'Lait', 'Œufs', 'Fruits à coque', 'Arachides', 'Soja', 'Sésame', 'Sulfites'];
+
+    // Fonction de redimensionnement d'image (Max 800px)
+    const resizeImage = (file, maxWidth = 800) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const elem = document.createElement('canvas');
+                    const scaleFactor = maxWidth / img.width;
+                    const width = maxWidth;
+                    const height = img.height * scaleFactor;
+                    
+                    elem.width = width;
+                    elem.height = height;
+                    const ctx = elem.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Compression JPEG 0.8
+                    resolve(elem.toDataURL('image/jpeg', 0.8));
+                };
+                img.onerror = error => reject(error);
+            };
+            reader.onerror = error => reject(error);
+        });
+    };
+
     // --- LOGIQUE DE CALCUL ---
     const calculateRecipeMetrics = (recipeId, allRecipes, allIngredients, settings, depth = 0) => {
       if (depth > 10) return { totalCost: 0, materialCost: 0, laborCost: 0, wasteCost: 0, totalWeight: 0, costPerKg: 0 }; 
@@ -114,7 +143,6 @@
             if (ing) {
               if (ing.unit === 'pce') {
                 totalMatCost += item.quantity * ing.price;
-                // CORRECTION: Prise en compte du poids unitaire si défini
                 if (ing.weightPerUnit) {
                    totalWeight += item.quantity * ing.weightPerUnit;
                 }
@@ -172,16 +200,18 @@
       );
     };
     
-    const IOSHeader = ({ title, rightAction, subtitle, leftAction }) => (
-      <div className="sticky top-0 z-20 bg-ios-bg/90 backdrop-blur-xl border-b border-gray-300/50 pt-safe px-4 pb-2 transition-all">
+    const IOSHeader = ({ title, rightAction, subtitle, leftAction, transparent = false }) => (
+      <div className={`sticky top-0 z-20 pt-safe px-4 pb-2 transition-all ${transparent ? 'bg-transparent' : 'bg-ios-bg/90 backdrop-blur-xl border-b border-gray-300/50'}`}>
         <div className="flex justify-between items-center h-11">
            <div className="min-w-[40px] flex items-center">{leftAction || <div className="w-8"></div>}</div>
            {rightAction ? rightAction : <div className="w-8"></div>}
         </div>
-        <div className="mt-1 pb-2">
-            <h1 className="text-[34px] font-bold tracking-tight text-black leading-tight">{title}</h1>
-            {subtitle && <div className="text-ios-subtext font-medium text-sm mt-0.5">{subtitle}</div>}
-        </div>
+        {!transparent && (
+            <div className="mt-1 pb-2">
+                <h1 className="text-[34px] font-bold tracking-tight text-black leading-tight">{title}</h1>
+                {subtitle && <div className="text-ios-subtext font-medium text-sm mt-0.5">{subtitle}</div>}
+            </div>
+        )}
       </div>
     );
 
@@ -357,27 +387,78 @@
          };
       }, [recipe, recipes, ingredients, settings, containers, labels, decorations, foils]);
 
-      // NOUVELLE FORMULE V1.08 : (Marchandises * (1 + Marge)) + Main d'œuvre
       const goodsCost = metrics.mat + metrics.waste + metrics.pack;
       const sellingPriceBatch = (goodsCost * (1 + settings.defaultMargin / 100)) + metrics.labor;
-      
       const sellingPriceKg = metrics.weight > 0 ? sellingPriceBatch / (metrics.weight/1000) : 0;
       const sellingPriceUnit = recipe.yieldCount > 0 ? sellingPriceBatch / recipe.yieldCount : 0;
+      
+      // Gestion de l'affichage de l'image (URL prioritaire)
+      const displayImage = recipe.photoUrl || recipe.photo;
+      
+      // Gestion des allergènes (Array ou String)
+      const allergensList = Array.isArray(recipe.allergens) 
+          ? recipe.allergens 
+          : (recipe.allergens ? recipe.allergens.split(',').map(s=>s.trim()).filter(s=>s) : []);
 
       return (
          <div className="bg-ios-bg fixed inset-0 z-40 overflow-auto animate-fade-in pb-safe pb-40">
-            <IOSHeader 
-               title={recipe.name} 
-               subtitle={recipe.category}
-               leftAction={<button onClick={onBack} className="text-ios-blue flex items-center font-medium"><ChevronLeft size={24}/> Retour</button>}
-               rightAction={<button onClick={onEdit} className="text-ios-blue p-2 bg-blue-100 rounded-full"><Settings size={22} /></button>}
-            />
+            {/* HERO IMAGE HEADER */}
+            <div className="relative w-full h-[300px] bg-gray-200">
+                {displayImage ? (
+                    <img src={displayImage} className="w-full h-full object-cover" alt={recipe.name} />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-800 to-amber-950">
+                        <ChefHat size={64} className="text-white/20" />
+                    </div>
+                )}
+                {/* Overlay gradient pour le texte */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                
+                {/* Boutons Header Transparents */}
+                <div className="absolute top-0 left-0 right-0 z-50 pt-safe px-4 py-2 flex justify-between items-center">
+                    <button onClick={onBack} className="w-10 h-10 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white active:bg-black/50 transition-colors">
+                        <ChevronLeft size={24}/>
+                    </button>
+                    <button onClick={onEdit} className="w-10 h-10 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white active:bg-black/50 transition-colors">
+                        <Settings size={20} />
+                    </button>
+                </div>
+
+                {/* Titre sur l'image */}
+                <div className="absolute bottom-6 left-4 right-4">
+                    <div className="text-white/80 text-sm font-semibold uppercase tracking-wider mb-1">{recipe.category}</div>
+                    <h1 className="text-white text-3xl font-bold leading-tight shadow-sm">{recipe.name}</h1>
+                </div>
+            </div>
             
-            <div className="p-4 space-y-6">
-               <div className="flex items-center justify-between px-4 text-gray-500 text-sm">
-                   <span>Temps prép: <span className="text-black font-medium">{recipe.prepTimeMinutes} min</span></span>
-                   <span>Rendement: <span className="text-black font-medium">{recipe.yieldCount} pcs</span></span>
+            <div className="p-4 space-y-6 -mt-2 relative z-10">
+               <div className="flex items-center justify-between px-4 text-gray-500 text-sm bg-white rounded-xl py-3 shadow-sm mx-2">
+                   <div className="text-center flex-1 border-r border-gray-100">
+                      <div className="text-black font-bold text-lg">{recipe.prepTimeMinutes}</div>
+                      <div className="text-[10px] uppercase">Minutes</div>
+                   </div>
+                   <div className="text-center flex-1">
+                      <div className="text-black font-bold text-lg">{recipe.yieldCount}</div>
+                      <div className="text-[10px] uppercase">Pièces</div>
+                   </div>
                </div>
+
+               {/* ALLERGENES TAGS (Amélioré) */}
+               {allergensList.length > 0 && (
+                   <div className="mx-2 bg-white rounded-xl p-4 shadow-sm">
+                       <div className="flex items-center gap-2 mb-3">
+                           <AlertTriangle className="text-orange-500" size={18} />
+                           <span className="text-xs font-bold uppercase text-gray-500">Allergènes</span>
+                       </div>
+                       <div className="flex flex-wrap gap-2">
+                           {allergensList.map(allergen => (
+                               <span key={allergen} className="px-3 py-1 bg-orange-50 text-orange-700 text-sm font-medium rounded-full border border-orange-100">
+                                   {allergen}
+                               </span>
+                           ))}
+                       </div>
+                   </div>
+               )}
 
                <div>
                  <div className="px-4 text-[13px] uppercase text-ios-subtext font-semibold mb-2">Ingrédients</div>
@@ -387,7 +468,6 @@
                       const isRec = !!item.recipeId;
                       const ref = isRec ? recipes.find(r=>r.id===item.recipeId) : ingredients.find(i=>i.id===item.ingredientId);
                       
-                      // NOUVEAU: Calcul du coût de la ligne pour affichage
                       let lineCost = 0;
                       if(isRec) {
                           const subM = calculateRecipeMetrics(item.recipeId, recipes, ingredients, settings);
@@ -424,7 +504,6 @@
                <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl">
                  <div className="text-center mb-4 text-white/50 text-xs uppercase font-bold">Analyse Financière</div>
                  
-                 {/* HEADER PRIX DE VENTE SPLIT */}
                  <div className="flex justify-between items-center mb-2 border-b border-white/10 pb-4">
                     <div>
                         <div className="text-2xl font-bold text-white">{formatCurrency(sellingPriceKg)}</div>
@@ -436,7 +515,6 @@
                     </div>
                  </div>
 
-                 {/* NOUVEAU: PRIX VENTE TOTAL LOT AVEC FORMULE */}
                  <div className="text-center mb-6 pb-2 border-b border-white/10">
                     <div className="text-white/70 text-[10px] uppercase tracking-wide mb-1">Prix Vente Total : ((Matière + Emballage + Perte) x Marge) + Main d'œuvre</div>
                     <div className="text-xl font-bold text-white">{formatCurrency(sellingPriceBatch)}</div>
@@ -464,10 +542,9 @@
       );
     }
 
-    // --- VUE EDITION INGREDIENT (Nouveau V3.23) ---
+    // --- VUE EDITION INGREDIENT ---
     const IngredientEditView = ({ ingredient, categories, onSave, onCancel }) => {
        const [form, setForm] = useState(ingredient);
-       
        return (
          <div className="bg-ios-bg fixed inset-0 z-[60] overflow-auto animate-slide-up pb-safe">
             <div className="sticky top-0 bg-white/90 backdrop-blur-md border-b z-50 px-4 py-3 flex justify-between items-center pt-safe">
@@ -484,13 +561,7 @@
                   <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
                      <span>Prix</span>
                      <div className="flex items-center gap-2">
-                        <IOSInput 
-                            type="number" 
-                            className="text-right w-24" 
-                            placeholder="Ex: 10"
-                            value={form.price} 
-                            onChange={e=>setForm({...form, price: e.target.value})} 
-                        />
+                        <IOSInput type="number" className="text-right w-24" placeholder="Ex: 10" value={form.price} onChange={e=>setForm({...form, price: e.target.value})} />
                         <span className="text-gray-500">€</span>
                      </div>
                   </div>
@@ -502,24 +573,15 @@
                         <option value="pce">Pièce (pce)</option>
                      </select>
                   </div>
-                  
-                  {/* NOUVEAU : Champ Poids par pièce */}
                   {form.unit === 'pce' && (
                       <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center animate-fade-in">
                          <span className="text-black">Poids unitaire (g)</span>
                          <div className="flex items-center gap-2">
-                            <IOSInput 
-                                type="number" 
-                                className="text-right w-24 text-black" 
-                                placeholder="Ex: 5"
-                                value={form.weightPerUnit || ''} 
-                                onChange={e=>setForm({...form, weightPerUnit: e.target.value})} 
-                            />
+                            <IOSInput type="number" className="text-right w-24 text-black" placeholder="Ex: 5" value={form.weightPerUnit || ''} onChange={e=>setForm({...form, weightPerUnit: e.target.value})} />
                             <span className="text-gray-500">g</span>
                          </div>
                       </div>
                   )}
-
                   <div className="px-4 py-3 flex justify-between items-center">
                      <span>Catégorie</span>
                      <select className="bg-transparent text-ios-blue outline-none text-right" value={form.category} onChange={e=>setForm({...form, category: e.target.value})}>
@@ -535,13 +597,48 @@
 
     // --- VUE EDITION RECETTE (Modal) ---
     const RecipeEditView = ({ recipe, ingredients, recipes, categories, containers, labels, decorations, foils, settings, onSave, onCancel, onDelete, onDuplicate }) => {
-      const [form, setForm] = useState(recipe);
+      // Conversion allergènes string -> array pour le formulaire
+      const initialAllergens = Array.isArray(recipe.allergens) 
+          ? recipe.allergens 
+          : (recipe.allergens ? recipe.allergens.split(',').map(s=>s.trim()).filter(s=>s) : []);
+
+      const [form, setForm] = useState({...recipe, allergens: initialAllergens});
       const [addMode, setAddMode] = useState(null);
       const [searchQuery, setSearchQuery] = useState('');
+      const [customAllergen, setCustomAllergen] = useState('');
+      const fileInputRef = useRef(null);
 
       const isSubRecipe = form.category === 'Sous-recette';
       const toggleSubRecipe = () => {
          setForm(prev => ({ ...prev, category: prev.category === 'Sous-recette' ? 'Confiserie' : 'Sous-recette' }));
+      };
+
+      const handlePhotoUpload = async (e) => {
+         const file = e.target.files[0];
+         if (!file) return;
+         try {
+             const resizedDataUrl = await resizeImage(file, 800);
+             setForm(prev => ({ ...prev, photo: resizedDataUrl }));
+         } catch (error) {
+             alert("Erreur lors du traitement de l'image");
+             console.error(error);
+         }
+      };
+
+      const toggleAllergen = (allergen) => {
+          const current = form.allergens || [];
+          if (current.includes(allergen)) {
+              setForm({...form, allergens: current.filter(a => a !== allergen)});
+          } else {
+              setForm({...form, allergens: [...current, allergen]});
+          }
+      };
+
+      const addCustomAllergen = () => {
+          if(customAllergen && !form.allergens.includes(customAllergen)) {
+              setForm({...form, allergens: [...form.allergens, customAllergen]});
+              setCustomAllergen('');
+          }
       };
 
       const metrics = useMemo(() => {
@@ -554,26 +651,17 @@
          const foilCost = (foil?.price||0)*form.yieldCount;
          const packUnit = (containers.find(c=>c.id===form.containerId)?.price||0) + (labels.find(l=>l.id===form.labelId)?.price||0) + (decorations.find(d=>d.id===form.decorationId)?.price||0);
          const packTotal = foilCost + (packUnit*(form.unitCount||0)) + (form.extraCost||0);
-         
          const total = rawMetrics.materialCost + rawMetrics.laborCost + rawMetrics.wasteCost + packTotal;
          
-         return { 
-             total, 
-             mat: rawMetrics.materialCost, 
-             labor: rawMetrics.laborCost, 
-             waste: rawMetrics.wasteCost,
-             pack: packTotal, 
-             costPerKg: rawMetrics.costPerKg, 
-             weight: rawMetrics.totalWeight 
-         };
+         return { total, mat: rawMetrics.materialCost, labor: rawMetrics.laborCost, waste: rawMetrics.wasteCost, pack: packTotal, costPerKg: rawMetrics.costPerKg, weight: rawMetrics.totalWeight };
       }, [form, recipes, ingredients, settings, containers, labels, decorations, foils]);
 
-      // NOUVELLE FORMULE V1.08 : (Marchandises * (1 + Marge)) + Main d'œuvre
       const goodsCost = metrics.mat + metrics.waste + metrics.pack;
       const sellingPriceBatch = (goodsCost * (1 + settings.defaultMargin / 100)) + metrics.labor;
-
       const sellingPriceKg = metrics.weight > 0 ? sellingPriceBatch / (metrics.weight/1000) : 0;
       const sellingPriceUnit = form.yieldCount > 0 ? sellingPriceBatch / form.yieldCount : 0;
+      
+      const displayImage = form.photoUrl || form.photo;
 
       return (
         <div className="bg-ios-bg fixed inset-0 z-[60] overflow-auto animate-slide-up pb-safe pb-40">
@@ -584,10 +672,49 @@
            </div>
            
            <div className="p-4 space-y-6">
+              {/* PHOTO UPLOAD + LIEN */}
+              <div className="flex flex-col items-center justify-center">
+                  <div 
+                    className="w-32 h-32 rounded-2xl bg-gray-200 overflow-hidden relative shadow-md cursor-pointer group mb-4"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                      {displayImage ? (
+                          <img src={displayImage} className="w-full h-full object-cover" alt="Recette" />
+                      ) : (
+                          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                              <Camera size={32} />
+                              <span className="text-[10px] mt-1">Ajouter</span>
+                          </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                         <span className="text-white text-xs font-bold">Modifier</span>
+                      </div>
+                  </div>
+                  
+                  <div className="w-full">
+                       <IOSListGroup>
+                            <div className="px-4 py-3 flex items-center gap-3">
+                                <LinkIcon size={20} className="text-gray-400" />
+                                <IOSInput 
+                                    placeholder="Lien Image (https://...)" 
+                                    value={form.photoUrl || ''} 
+                                    onChange={e=>setForm({...form, photoUrl: e.target.value})} 
+                                    className="w-full text-sm"
+                                />
+                            </div>
+                            <div className="px-4 py-3 border-t border-gray-100 flex justify-center">
+                                <button onClick={() => fileInputRef.current?.click()} className="text-ios-blue text-sm font-medium">
+                                    Ou choisir une photo locale
+                                </button>
+                            </div>
+                       </IOSListGroup>
+                  </div>
+                  <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
+              </div>
+
               <IOSListGroup>
                  <div className="px-4 py-3 border-b border-gray-100"><IOSInput placeholder="Nom de la recette" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="font-bold text-xl w-full"/></div>
                  
-                 {/* SWITCH SOUS RECETTE */}
                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center cursor-pointer" onClick={toggleSubRecipe}>
                     <span className="text-[17px]">Est une sous-recette</span>
                     <div className={`w-[51px] h-[31px] rounded-full p-[2px] transition-colors duration-200 ${isSubRecipe ? 'bg-[#34c759]' : 'bg-[#e9e9ea]'}`}>
@@ -613,6 +740,44 @@
                     <IOSInput type="number" className="text-right w-20" value={form.yieldCount||''} onChange={e=>setForm({...form, yieldCount: parseFloat(e.target.value)})} />
                  </div>
               </IOSListGroup>
+              
+              <div className="text-[13px] uppercase text-ios-subtext font-semibold px-4 mb-2">Allergènes</div>
+              <div className="mx-4 bg-white rounded-xl p-4 shadow-sm mb-6">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                      {PREDEFINED_ALLERGENS.map(allergen => {
+                          const isSelected = form.allergens.includes(allergen);
+                          return (
+                              <button 
+                                key={allergen}
+                                onClick={() => toggleAllergen(allergen)}
+                                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${isSelected ? 'bg-ios-blue text-white border-ios-blue' : 'bg-gray-50 text-gray-600 border-gray-200 active:bg-gray-100'}`}
+                              >
+                                  {allergen}
+                              </button>
+                          );
+                      })}
+                      {form.allergens.filter(a => !PREDEFINED_ALLERGENS.includes(a)).map(custom => (
+                          <button 
+                            key={custom}
+                            onClick={() => toggleAllergen(custom)}
+                            className="px-3 py-1.5 rounded-full text-sm font-medium border bg-ios-blue text-white border-ios-blue"
+                          >
+                              {custom} <span className="opacity-50 ml-1">×</span>
+                          </button>
+                      ))}
+                  </div>
+                  <div className="flex gap-2 items-center pt-2 border-t border-gray-100">
+                      <input 
+                        className="flex-1 bg-gray-50 rounded px-2 py-1.5 text-sm outline-none border border-transparent focus:border-ios-blue focus:bg-white transition-colors"
+                        placeholder="Autre allergène..."
+                        value={customAllergen}
+                        onChange={e => setCustomAllergen(e.target.value)}
+                      />
+                      <button onClick={addCustomAllergen} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-gray-600 active:bg-ios-blue active:text-white transition-colors">
+                          <Plus size={16} />
+                      </button>
+                  </div>
+              </div>
 
               <div className="flex items-center justify-between px-4">
                  <div className="text-[13px] uppercase text-ios-subtext font-semibold">Composition</div>
@@ -718,7 +883,6 @@
               <div className="mx-4 bg-[#3e2723] rounded-2xl p-6 text-white shadow-xl mb-6">
                  <div className="text-center mb-4 text-white/50 text-xs uppercase font-bold">Analyse Financière</div>
                  
-                 {/* HEADER PRIX DE VENTE SPLIT */}
                  <div className="flex justify-between items-center mb-2 border-b border-white/10 pb-4">
                     <div>
                         <div className="text-2xl font-bold text-white">{formatCurrency(sellingPriceKg)}</div>
@@ -730,7 +894,6 @@
                     </div>
                  </div>
 
-                 {/* NOUVEAU: PRIX VENTE TOTAL LOT AVEC FORMULE */}
                  <div className="text-center mb-6 pb-2 border-b border-white/10">
                     <div className="text-white/70 text-[10px] uppercase tracking-wide mb-1">Prix Vente Total : ((Matière + Emballage + Perte) x Marge) + Main d'œuvre</div>
                     <div className="text-xl font-bold text-white">{formatCurrency(sellingPriceBatch)}</div>
@@ -790,20 +953,13 @@
       const [decorations, setDecorations] = useState([]);
       const [foils, setFoils] = useState([]);
       
-      // STATES DE NAVIGATION
-      const [viewingId, setViewingId] = useState(null); // Mode Lecture Recette
-      const [editingId, setEditingId] = useState(null); // Mode Edition Recette
-      const [editingIngredient, setEditingIngredient] = useState(null); // Mode Edition Ingrédient (V3.23)
-      const [recipeTab, setRecipeTab] = useState('main'); // 'main' | 'sub' (Nouveau V1.04)
-      
-      // STATES DE FILTRE (Nouveau V1.05)
+      const [viewingId, setViewingId] = useState(null); 
+      const [editingId, setEditingId] = useState(null); 
+      const [editingIngredient, setEditingIngredient] = useState(null); 
+      const [recipeTab, setRecipeTab] = useState('main'); 
       const [filterCategory, setFilterCategory] = useState(null);
       const [showFilterMenu, setShowFilterMenu] = useState(false);
-
-      // STATE RECHERCHE DASHBOARD
       const [dashboardSearch, setDashboardSearch] = useState('');
-
-      // STATE ALERTE (V3.20)
       const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
       const requestConfirm = (title, message, action) => {
@@ -815,7 +971,6 @@
          });
       };
 
-      // Chargement Auto
       useEffect(() => {
          const d = localStorage.getItem('choco_app_ios_v2');
          if(d) {
@@ -833,7 +988,6 @@
          }
       }, []);
 
-      // Sauvegarde Auto
       useEffect(() => {
          const data = { ingredients, recipes, settings, categories, containers, labels, decorations, foils };
          localStorage.setItem('choco_app_ios_v2', JSON.stringify(data));
@@ -870,14 +1024,33 @@
           a.click();
       }
 
+      // --- GROUPE LES RECETTES PAR CATEGORIE POUR LE DASHBOARD ---
+      const groupedRecipes = useMemo(() => {
+          const groups = {};
+          recipes.forEach(r => {
+              if (r.category === 'Sous-recette') return; // On masque les sous-recettes de l'accueil pour l'instant
+              if (!groups[r.category]) groups[r.category] = [];
+              groups[r.category].push(r);
+          });
+          return groups;
+      }, [recipes]);
+
       const renderContent = () => {
          if (view === 'dashboard') {
             return (
                <div className="pb-32">
-                  <IOSHeader title={`Bonjour ${settings.chefName}`} subtitle={APP_VERSION} />
+                  <IOSHeader 
+                    title="Accueil" 
+                    subtitle={settings.chefName} 
+                    transparent={false} 
+                    rightAction={
+                        <button onClick={() => { setView('recipes'); setEditingId('new'); }} className="bg-ios-blue text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md active:scale-95 transition-transform">
+                             <Plus size={20} />
+                        </button>
+                    }
+                  />
                   
-                  {/* SEARCH BAR DASHBOARD - Modified margin */}
-                  <div className="px-4 mt-4 mb-4">
+                  <div className="px-4 mt-2 mb-6">
                      <div className="bg-gray-200/50 rounded-xl px-3 py-2.5 flex items-center gap-2">
                         <Search size={18} className="text-gray-500" />
                         <input 
@@ -905,36 +1078,66 @@
                                  value={r.category}
                                  isLast={false} 
                                  onClick={() => {
-                                    setView('recipes');
                                     setViewingId(r.id);
                                     setDashboardSearch('');
                                  }}
                               />
                            ))}
-                           {recipes.filter(r => r.name.toLowerCase().includes(dashboardSearch.toLowerCase())).length === 0 && (
-                              <div className="p-4 text-center text-gray-500">Aucune recette trouvée</div>
-                           )}
                         </IOSListGroup>
                      </div>
                   ) : (
-                     <div className="animate-fade-in">
-                        <IOSListGroup title="Raccourcis">
-                           <IOSListItem icon={Plus} label="Nouvelle Recette" onClick={()=>{setView('recipes');setEditingId('new')}} />
-                           <IOSListItem icon={Settings} label="Réglages" onClick={()=>setView('settings')} isLast />
-                        </IOSListGroup>
+                     <div className="animate-fade-in space-y-8 mt-4">
+                        {/* LISTE PAR CATEGORIES (STYLE PODCASTS) */}
+                        {Object.keys(groupedRecipes).sort().map(cat => (
+                            <div key={cat} className="flex flex-col">
+                                <div className="px-4 flex items-center justify-between mb-3">
+                                    <h2 className="text-xl font-bold text-black">{cat}</h2>
+                                    <ChevronRight size={18} className="text-gray-400" />
+                                </div>
+                                <div className="flex overflow-x-auto px-4 gap-4 pb-4 no-scrollbar snap-x">
+                                    {groupedRecipes[cat].map(recipe => (
+                                        <div 
+                                            key={recipe.id} 
+                                            className="min-w-[160px] w-[160px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform"
+                                            onClick={() => setViewingId(recipe.id)}
+                                        >
+                                            <div className="aspect-square w-full rounded-xl bg-gray-100 shadow-md overflow-hidden relative">
+                                                {(recipe.photoUrl || recipe.photo) ? (
+                                                    <img src={recipe.photoUrl || recipe.photo} className="w-full h-full object-cover" alt={recipe.name} />
+                                                ) : (
+                                                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200">
+                                                        <ChefHat size={32} className="text-gray-300 mb-2" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h3 className="text-[15px] font-semibold text-black leading-tight line-clamp-2">{recipe.name}</h3>
+                                                <p className="text-[13px] text-gray-500 mt-0.5">{recipe.yieldCount} pcs</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="h-px bg-gray-200 mx-4 mt-2"></div>
+                            </div>
+                        ))}
+                        
+                        {Object.keys(groupedRecipes).length === 0 && (
+                            <div className="text-center py-10 text-gray-400">
+                                Aucune recette pour le moment.
+                            </div>
+                        )}
                      </div>
                   )}
                </div>
             )
          }
+         // ... Le reste (recipes, ingredients, settings) reste le même
          if (view === 'recipes') {
-             // FILTRAGE ET TRI (V1.05)
              const filteredRecipes = recipes
                  .filter(r => recipeTab === 'sub' ? r.category === 'Sous-recette' : r.category !== 'Sous-recette')
                  .filter(r => filterCategory ? r.category === filterCategory : true)
                  .sort((a,b) => a.name.localeCompare(b.name));
 
-             // Bouton de gauche : Filtre (uniquement sur l'onglet Principales car les sous-recettes n'ont pas de sous-catégories)
              const leftAction = recipeTab === 'main' ? (
                 <button onClick={() => setShowFilterMenu(true)} className={`flex items-center justify-center w-10 h-10 -ml-2 rounded-full active:bg-gray-100 ${filterCategory ? 'text-ios-blue' : 'text-ios-blue'}`}>
                    <Filter size={24} className={filterCategory ? "fill-current" : ""} strokeWidth={2} />
@@ -943,69 +1146,41 @@
 
              return (
                  <div className="pb-32">
-                    <IOSHeader title="Recettes" leftAction={leftAction} rightAction={<button onClick={()=>setEditingId('new')} className="text-ios-blue"><Plus size={24}/></button>} />
-                    
-                    {/* ONGLET SELECTEUR TYPE RECETTE (V1.04) */}
+                    <IOSHeader title="Liste" leftAction={leftAction} rightAction={<button onClick={()=>setEditingId('new')} className="text-ios-blue"><Plus size={24}/></button>} />
                     <div className="px-4 pb-4">
                        <div className="bg-[#e3e3e8] p-0.5 rounded-lg flex h-8 relative">
-                          <button 
-                             onClick={()=>{setRecipeTab('main'); setFilterCategory(null);}}
-                             className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='main'?'bg-white shadow text-black':'text-gray-500'}`}
-                          >
-                             Recettes Principales
-                          </button>
-                          <button 
-                             onClick={()=>{setRecipeTab('sub'); setFilterCategory(null);}}
-                             className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='sub'?'bg-white shadow text-black':'text-gray-500'}`}
-                          >
-                             Sous-recettes
-                          </button>
+                          <button onClick={()=>{setRecipeTab('main'); setFilterCategory(null);}} className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='main'?'bg-white shadow text-black':'text-gray-500'}`}>Recettes Principales</button>
+                          <button onClick={()=>{setRecipeTab('sub'); setFilterCategory(null);}} className={`flex-1 rounded-[7px] text-[13px] font-medium transition-all z-10 ${recipeTab==='sub'?'bg-white shadow text-black':'text-gray-500'}`}>Sous-recettes</button>
                        </div>
                     </div>
-
-                    {/* INDICATEUR DE FILTRE ACTIF */}
                     {filterCategory && (
                        <div className="px-4 pb-3 flex items-center justify-between animate-fade-in">
-                           <div className="text-sm font-semibold text-black">
-                               Filtre : <span className="text-ios-blue">{filterCategory}</span>
-                           </div>
-                           <button onClick={()=>setFilterCategory(null)} className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full flex items-center gap-1">
-                               <X size={12}/> Effacer
-                           </button>
+                           <div className="text-sm font-semibold text-black">Filtre : <span className="text-ios-blue">{filterCategory}</span></div>
+                           <button onClick={()=>setFilterCategory(null)} className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full flex items-center gap-1"><X size={12}/> Effacer</button>
                        </div>
                     )}
-
-                    {filteredRecipes.length === 0 ? (
-                       <div className="p-10 text-center text-gray-400">Aucune recette trouvée</div>
-                    ) : (
+                    {filteredRecipes.length === 0 ? <div className="p-10 text-center text-gray-400">Aucune recette trouvée</div> : (
                        <IOSListGroup>
                           {filteredRecipes.map(r => {
                                 const met = calculateRecipeMetrics(r.id, recipes, ingredients, settings);
-                                
-                                // FIX: Ajout du coût packaging pour correspondre à la fiche détail et corriger le calcul liste
                                 const foil = foils.find(f=>f.id===r.foilId);
                                 const foilCost = (foil?.price||0)*r.yieldCount;
                                 const packUnit = (containers.find(c=>c.id===r.containerId)?.price||0) + (labels.find(l=>l.id===r.labelId)?.price||0) + (decorations.find(d=>d.id===r.decorationId)?.price||0);
                                 const packTotal = foilCost + (packUnit*(r.unitCount||0)) + (r.extraCost||0);
                                 const fullTotalCost = met.totalCost + packTotal;
-
-                                // NOUVELLE FORMULE V1.08 : (Marchandises * (1 + Marge)) + Main d'œuvre
                                 const goodsCost = met.materialCost + met.wasteCost + packTotal;
                                 const sellBatch = (goodsCost * (1 + settings.defaultMargin / 100)) + met.laborCost;
-                                
                                 const sellKg = met.totalWeight > 0 ? sellBatch / (met.totalWeight/1000) : 0;
                                 const sellUnit = r.yieldCount > 0 ? sellBatch / r.yieldCount : 0;
                                 const costPerKg = met.totalWeight > 0 ? fullTotalCost / (met.totalWeight/1000) : 0;
 
                                 return (
-                                   <SwipeRow key={r.id} onDelete={()=>{
-                                      requestConfirm(
-                                         "Supprimer la recette ?",
-                                         `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`,
-                                         () => setRecipes(recipes.filter(x => x.id !== r.id))
-                                      );
-                                   }}>
+                                   <SwipeRow key={r.id} onDelete={()=>{ requestConfirm("Supprimer la recette ?", `Êtes-vous sûr de vouloir supprimer "${r.name}" ?`, () => setRecipes(recipes.filter(x => x.id !== r.id))); }}>
                                       <div className="pl-4 pr-4 py-3 flex w-full items-center gap-2 active:bg-gray-100 transition-colors" onClick={()=>setViewingId(r.id)}>
+                                         {/* MINIATURE DANS LISTE */}
+                                         <div className="w-10 h-10 rounded bg-gray-200 shrink-0 overflow-hidden">
+                                             {(r.photoUrl || r.photo) ? <img src={r.photoUrl || r.photo} className="w-full h-full object-cover"/> : <ChefHat className="w-full h-full p-2 text-gray-400"/>}
+                                         </div>
                                          <div className="flex-1 min-w-0">
                                             <div className="font-semibold truncate text-[17px]">{r.name}</div>
                                             <div className="text-[14px] text-gray-500">{r.category}</div>
@@ -1022,8 +1197,6 @@
                              })}
                        </IOSListGroup>
                     )}
-
-                    {/* MODAL MENU FILTRE */}
                     {showFilterMenu && (
                         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setShowFilterMenu(false)}>
                             <div className="bg-white w-full sm:w-[320px] sm:rounded-2xl rounded-t-2xl overflow-hidden shadow-2xl animate-slide-up pb-safe" onClick={e => e.stopPropagation()}>
@@ -1032,78 +1205,17 @@
                                     <button onClick={() => setShowFilterMenu(false)} className="bg-gray-200 rounded-full p-1 text-gray-500"><X size={16}/></button>
                                 </div>
                                 <div className="max-h-[60vh] overflow-y-auto">
-                                     <div 
-                                        onClick={() => { setFilterCategory(null); setShowFilterMenu(false); }}
-                                        className={`px-4 py-3.5 border-b border-gray-100 active:bg-gray-100 cursor-pointer flex justify-between items-center ${filterCategory === null ? 'text-ios-blue font-semibold bg-blue-50/50' : ''}`}
-                                     >
-                                        <span className="text-[17px]">Tout afficher</span>
-                                        {filterCategory === null && <span className="text-ios-blue font-bold">✓</span>}
+                                     <div onClick={() => { setFilterCategory(null); setShowFilterMenu(false); }} className={`px-4 py-3.5 border-b border-gray-100 active:bg-gray-100 cursor-pointer flex justify-between items-center ${filterCategory === null ? 'text-ios-blue font-semibold bg-blue-50/50' : ''}`}>
+                                        <span className="text-[17px]">Tout afficher</span>{filterCategory === null && <span className="text-ios-blue font-bold">✓</span>}
                                      </div>
                                      {[...categories].filter(c => c !== 'Sous-recette').sort().map(cat => (
-                                         <div 
-                                            key={cat} 
-                                            onClick={() => { setFilterCategory(cat); setShowFilterMenu(false); }}
-                                            className={`px-4 py-3.5 border-b border-gray-100 active:bg-gray-100 cursor-pointer flex justify-between items-center ${filterCategory === cat ? 'text-ios-blue font-semibold bg-blue-50/50' : ''}`}
-                                         >
-                                            <span className="text-[17px]">{cat}</span>
-                                            {filterCategory === cat && <span className="text-ios-blue font-bold">✓</span>}
+                                         <div key={cat} onClick={() => { setFilterCategory(cat); setShowFilterMenu(false); }} className={`px-4 py-3.5 border-b border-gray-100 active:bg-gray-100 cursor-pointer flex justify-between items-center ${filterCategory === cat ? 'text-ios-blue font-semibold bg-blue-50/50' : ''}`}>
+                                            <span className="text-[17px]">{cat}</span>{filterCategory === cat && <span className="text-ios-blue font-bold">✓</span>}
                                          </div>
                                      ))}
                                 </div>
                             </div>
                         </div>
-                    )}
-
-                    {/* MODAL LECTURE SEULE */}
-                    {viewingId && !editingId && (
-                       <RecipeDetailView 
-                          recipe={recipes.find(r=>r.id===viewingId)}
-                          ingredients={ingredients} recipes={recipes} settings={settings}
-                          containers={containers} labels={labels} decorations={decorations} foils={foils}
-                          onBack={()=>setViewingId(null)}
-                          onEdit={()=>setEditingId(viewingId)}
-                       />
-                    )}
-
-                    {/* MODAL EDITION RECETTE */}
-                    {editingId && (
-                       <RecipeEditView 
-                          recipe={editingId==='new' ? {id:'new',name:'',category:'Confiserie',ingredients:[],prepTimeMinutes:0,yieldCount:1,extraCost:0,foilId:'',unitCount:0,containerId:'',labelId:'',decorationId:''} : recipes.find(r=>r.id===editingId)}
-                          ingredients={ingredients} recipes={recipes} categories={categories} settings={settings}
-                          containers={containers} labels={labels} decorations={decorations} foils={foils}
-                          onCancel={()=>setEditingId(null)}
-                          onSave={(r)=>{
-                             if(r.id==='new') setRecipes([...recipes, {...r, id:generateId()}]);
-                             else setRecipes(recipes.map(x=>x.id===r.id?r:x));
-                             setEditingId(null);
-                             // Si c'était pas new, on reste sur la vue détail
-                             if(r.id!=='new') setViewingId(r.id);
-                          }}
-                          onDelete={editingId!=='new' ? () => {
-                             requestConfirm(
-                                "Supprimer la recette ?",
-                                "Cette action est irréversible.",
-                                () => {
-                                   setRecipes(recipes.filter(r=>r.id!==editingId));
-                                   setEditingId(null);
-                                   setViewingId(null);
-                                }
-                             );
-                          } : undefined}
-                          onDuplicate={editingId!=='new' ? () => {
-                             const original = recipes.find(r => r.id === editingId);
-                             if (original) {
-                                const newRecipe = {
-                                   ...original,
-                                   id: generateId(),
-                                   name: `${original.name} (Copie)`,
-                                };
-                                setRecipes([...recipes, newRecipe]);
-                                setEditingId(null);
-                                alert(`Recette dupliquée : ${newRecipe.name}`);
-                             }
-                          } : undefined}
-                       />
                     )}
                  </div>
              )
@@ -1115,39 +1227,11 @@
                    <IOSHeader title="Ingrédients" rightAction={<button onClick={()=>setEditingIngredient({id: 'new', name: '', price: '', unit: 'kg', category: 'Autre'})} className="text-ios-blue min-w-[44px] flex items-center justify-end"><Plus size={24}/></button>} />
                    <IOSListGroup>
                       {sortedIngredients.map((ing) => (
-                         <SwipeRow key={ing.id} onDelete={()=>{
-                             requestConfirm(
-                                "Supprimer l'ingrédient ?",
-                                `Voulez-vous supprimer "${ing.name}" ?`,
-                                () => setIngredients(ingredients.filter(x => x.id !== ing.id))
-                             );
-                         }}>
-                             <IOSListItem 
-                                label={ing.name}
-                                value={`${formatCurrency(ing.price)} / ${ing.unit}`}
-                                onClick={() => setEditingIngredient(ing)}
-                                isLast={false}
-                             />
+                         <SwipeRow key={ing.id} onDelete={()=>{requestConfirm("Supprimer l'ingrédient ?", `Voulez-vous supprimer "${ing.name}" ?`, () => setIngredients(ingredients.filter(x => x.id !== ing.id)));}}>
+                             <IOSListItem label={ing.name} value={`${formatCurrency(ing.price)} / ${ing.unit}`} onClick={() => setEditingIngredient(ing)} isLast={false} />
                          </SwipeRow>
                       ))}
                    </IOSListGroup>
-
-                   {/* MODAL EDITION INGREDIENT */}
-                   {editingIngredient && (
-                      <IngredientEditView
-                         ingredient={editingIngredient}
-                         categories={categories}
-                         onCancel={() => setEditingIngredient(null)}
-                         onSave={(ing) => {
-                            if (ing.id === 'new') {
-                               setIngredients([...ingredients, { ...ing, id: generateId() }]);
-                            } else {
-                               setIngredients(ingredients.map(x => x.id === ing.id ? ing : x));
-                            }
-                            setEditingIngredient(null);
-                         }}
-                      />
-                   )}
                 </div>
              )
          }
@@ -1166,14 +1250,9 @@
                    <PackagingManager title="Papillotes" items={foils} setItems={setFoils} />
                    <IOSListGroup title="Données">
                       <IOSListItem label="Exporter JSON" icon={Download} onClick={handleExport} />
-                      <div className="relative">
-                         <IOSListItem label="Importer JSON" icon={Upload} isLast />
-                         <input type="file" onChange={handleImport} accept=".json" className="absolute inset-0 w-full h-full opacity-0 z-50 cursor-pointer" />
-                      </div>
+                      <div className="relative"><IOSListItem label="Importer JSON" icon={Upload} isLast /><input type="file" onChange={handleImport} accept=".json" className="absolute inset-0 w-full h-full opacity-0 z-50 cursor-pointer" /></div>
                    </IOSListGroup>
-                   <div className="text-center p-6 text-ios-subtext text-xs">
-                      ChocoCost {APP_VERSION}
-                   </div>
+                   <div className="text-center p-6 text-ios-subtext text-xs">ChocoCost {APP_VERSION}</div>
                 </div>
              )
          }
@@ -1188,13 +1267,55 @@
 
       return (
          <div className="h-full relative">
-            <IOSAlert 
-               isOpen={alertConfig.isOpen} 
-               title={alertConfig.title} 
-               message={alertConfig.message} 
-               onConfirm={alertConfig.onConfirm} 
-               onCancel={() => setAlertConfig(prev => ({...prev, isOpen: false}))} 
-            />
+            <IOSAlert isOpen={alertConfig.isOpen} title={alertConfig.title} message={alertConfig.message} onConfirm={alertConfig.onConfirm} onCancel={() => setAlertConfig(prev => ({...prev, isOpen: false}))} />
+            
+            {/* VUES MODALES AU TOP NIVEAU */}
+            {viewingId && !editingId && (
+               <RecipeDetailView 
+                  recipe={recipes.find(r=>r.id===viewingId)}
+                  ingredients={ingredients} recipes={recipes} settings={settings}
+                  containers={containers} labels={labels} decorations={decorations} foils={foils}
+                  onBack={()=>setViewingId(null)}
+                  onEdit={()=>setEditingId(viewingId)}
+               />
+            )}
+            {editingId && (
+               <RecipeEditView 
+                  recipe={editingId==='new' ? {id:'new',name:'',category:'Confiserie',ingredients:[],prepTimeMinutes:0,yieldCount:1,extraCost:0,foilId:'',unitCount:0,containerId:'',labelId:'',decorationId:'', allergens: []} : recipes.find(r=>r.id===editingId)}
+                  ingredients={ingredients} recipes={recipes} categories={categories} settings={settings}
+                  containers={containers} labels={labels} decorations={decorations} foils={foils}
+                  onCancel={()=>setEditingId(null)}
+                  onSave={(r)=>{
+                     if(r.id==='new') setRecipes([...recipes, {...r, id:generateId()}]);
+                     else setRecipes(recipes.map(x=>x.id===r.id?r:x));
+                     setEditingId(null);
+                     if(r.id!=='new') setViewingId(r.id);
+                  }}
+                  onDelete={editingId!=='new' ? () => {requestConfirm("Supprimer la recette ?", "Cette action est irréversible.", () => {setRecipes(recipes.filter(r=>r.id!==editingId));setEditingId(null);setViewingId(null);});} : undefined}
+                  onDuplicate={editingId!=='new' ? () => {
+                     const original = recipes.find(r => r.id === editingId);
+                     if (original) {
+                        const newRecipe = {...original, id: generateId(), name: `${original.name} (Copie)`};
+                        setRecipes([...recipes, newRecipe]);
+                        setEditingId(null);
+                        alert(`Recette dupliquée : ${newRecipe.name}`);
+                     }
+                  } : undefined}
+               />
+            )}
+            {editingIngredient && (
+               <IngredientEditView
+                  ingredient={editingIngredient}
+                  categories={categories}
+                  onCancel={() => setEditingIngredient(null)}
+                  onSave={(ing) => {
+                     if (ing.id === 'new') setIngredients([...ingredients, { ...ing, id: generateId() }]);
+                     else setIngredients(ingredients.map(x => x.id === ing.id ? ing : x));
+                     setEditingIngredient(null);
+                  }}
+               />
+            )}
+
             <main className="absolute inset-0 overflow-y-auto no-scrollbar bg-ios-bg pb-24">
                {renderContent()}
             </main>

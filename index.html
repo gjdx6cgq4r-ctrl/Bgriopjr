@@ -78,10 +78,10 @@
     import { createRoot } from 'react-dom/client';
     import { 
       LayoutDashboard, ChefHat, Settings, Plus, Trash2, Download, Upload, 
-      ChevronRight, List, X, Search, ChevronLeft, Filter, Camera, Link as LinkIcon, ShoppingBag, AlertTriangle, Palette, Check
+      ChevronRight, List, X, Search, ChevronLeft, Filter, Camera, Link as LinkIcon, ShoppingBag, AlertTriangle, Palette, Check, Tag, Copy
     } from 'lucide-react';
 
-    const APP_VERSION = "V1.20 - Unified Square Cards";
+    const APP_VERSION = "V1.22 - Batch Labels";
     const generateId = () => Math.random().toString(36).substr(2, 9);
     const formatCurrency = (amount) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(isNaN(amount) ? 0 : amount);
 
@@ -168,7 +168,7 @@
     };
 
     const DEFAULT_SETTINGS = { 
-      hourlyRate: 15.00, defaultMargin: 40, electricityCost: 0, wastePercentage: 5, chefName: 'Chef Chocolatier', hiddenCategories: [], theme: 'luxury'
+      hourlyRate: 15.00, defaultMargin: 40, electricityCost: 0, wastePercentage: 5, chefName: 'Chef Chocolatier', hiddenCategories: [], theme: 'choco'
     };
     const DEFAULT_CATEGORIES = ['Chocolat', 'Sous-recette', 'Fruits Secs', 'Sucre', 'Crèmerie', 'Arômes', 'Confiserie', 'Pâte à tartiner'];
     const PREDEFINED_ALLERGENS = ['Gluten', 'Lait', 'Œufs', 'Fruits à coque', 'Arachides', 'Soja', 'Sésame', 'Sulfites'];
@@ -341,6 +341,124 @@
     };
 
     // --- SUB-VIEWS ---
+
+    const LabelGenerator = ({ recipes, ingredients, settings, onBack, theme }) => {
+        const [selected, setSelected] = useState([]);
+        const [results, setResults] = useState(null);
+
+        const toggle = (id) => {
+            if(selected.includes(id)) setSelected(selected.filter(i => i !== id));
+            else setSelected([...selected, id]);
+        };
+
+        const getLabelData = (rootId) => {
+            let aggWeights = {};
+            let aggAllergens = new Set();
+            const rootRecipe = recipes.find(r => r.id === rootId);
+            if(!rootRecipe) return null;
+
+            const process = (rId, factor = 1) => {
+                const r = recipes.find(x => x.id === rId);
+                if(!r) return;
+
+                if(r.allergens) {
+                   const list = Array.isArray(r.allergens) ? r.allergens : (r.allergens ? String(r.allergens).split(',').map(s=>s.trim()) : []);
+                   list.forEach(a => { if(a) aggAllergens.add(a); });
+                }
+
+                r.ingredients.forEach(item => {
+                    if(item.recipeId) {
+                        const subMetrics = calculateRecipeMetrics(item.recipeId, recipes, ingredients, settings);
+                        const subTotalWeight = subMetrics.totalWeight || 1;
+                        const ratio = (item.quantity * factor) / subTotalWeight;
+                        process(item.recipeId, ratio);
+                    } else if (item.ingredientId) {
+                        const ing = ingredients.find(i => i.id === item.ingredientId);
+                        if(ing) {
+                            let weight = 0;
+                            if(ing.unit === 'pce') {
+                                 weight = item.quantity * (ing.weightPerUnit || 0);
+                            } else {
+                                 weight = item.quantity;
+                            }
+                            const finalWeight = weight * factor;
+                            aggWeights[ing.name] = (aggWeights[ing.name] || 0) + finalWeight;
+                        }
+                    }
+                });
+            };
+
+            process(rootId);
+
+            const sorted = Object.entries(aggWeights)
+                .sort(([, a], [, b]) => b - a)
+                .map(([name]) => name);
+            
+            return {
+                name: rootRecipe.name,
+                ingredients: sorted.join(', '),
+                allergens: Array.from(aggAllergens).join(', ')
+            };
+        };
+
+        const generate = () => {
+            const data = selected.map(id => getLabelData(id)).filter(x => x);
+            setResults(data);
+        };
+
+        const handleCopyAll = () => {
+             const text = results.map(r => `${r.name.toUpperCase()}\nIngrédients: ${r.ingredients}\nAllergènes: ${r.allergens}`).join('\n\n-------------------\n\n');
+             navigator.clipboard.writeText(text);
+             alert("Toutes les étiquettes ont été copiées !");
+        };
+
+        return (
+            <div className={`${theme.bg} fixed inset-0 z-[60] overflow-auto animate-slide-up pb-safe`}>
+                <ThemeHeader title="Export Étiquettes" centered leftAction={<button onClick={onBack}>Fermer</button>} theme={theme} />
+                <div className="p-4 space-y-4">
+                    {!results ? (
+                        <>
+                             <div className={`${theme.textSec} text-sm px-2`}>Sélectionnez les recettes pour générer une étiquette pour chacune (ingrédients triés par poids + allergènes).</div>
+                             <ThemeListGroup theme={theme}>
+                                <div onClick={()=>setSelected(selected.length === recipes.length ? [] : recipes.map(r=>r.id))} className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center cursor-pointer font-bold`}>
+                                    <span className={theme.text}>{selected.length === recipes.length ? "Tout désélectionner" : "Tout sélectionner"}</span>
+                                </div>
+                                {recipes.sort((a,b)=>a.name.localeCompare(b.name)).map(r => (
+                                    <div key={r.id} onClick={()=>toggle(r.id)} className={`px-4 py-3 border-b ${theme.cardBorder} flex justify-between items-center cursor-pointer last:border-0`}>
+                                        <span className={theme.text}>{r.name}</span>
+                                        {selected.includes(r.id) && <Check size={20} className={theme.accent} />}
+                                    </div>
+                                ))}
+                             </ThemeListGroup>
+                             <div className="px-4">
+                                 <button onClick={generate} disabled={selected.length===0} className={`w-full py-3 rounded-xl font-bold ${selected.length===0 ? 'bg-gray-500/20 text-gray-500' : theme.btnPrimary}`}>Générer ({selected.length})</button>
+                             </div>
+                        </>
+                    ) : (
+                        <div className="animate-fade-in space-y-6 pb-20">
+                            {results.map((res, i) => (
+                                <div key={i} className={`p-4 ${theme.card} rounded-xl shadow-sm border ${theme.cardBorder}`}>
+                                    <div className={`font-bold ${theme.accent} mb-2 text-lg`}>{res.name}</div>
+                                    <div className="mb-3">
+                                        <span className={`text-xs font-bold uppercase tracking-wide ${theme.textSec} block mb-1`}>Ingrédients</span>
+                                        <div className={`${theme.text} text-sm leading-relaxed select-all`}>{res.ingredients || "Aucun ingrédient."}</div>
+                                    </div>
+                                    <div>
+                                        <span className={`text-xs font-bold uppercase tracking-wide text-red-500 opacity-80 block mb-1`}>Allergènes</span>
+                                        <div className={`${theme.text} text-sm font-medium text-red-500 select-all`}>{res.allergens || "Néant."}</div>
+                                    </div>
+                                </div>
+                            ))}
+                             <div className="px-4 flex gap-3 pt-2">
+                                 <button onClick={()=>setResults(null)} className={`flex-1 py-3 rounded-xl font-bold border ${theme.cardBorder} ${theme.text}`}>Retour</button>
+                                 <button onClick={handleCopyAll} className={`flex-1 py-3 rounded-xl font-bold ${theme.btnPrimary} flex justify-center items-center gap-2`}><Copy size={18}/> Copier Tout</button>
+                             </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     const PackagingManager = ({ title, items, setItems, theme }) => {
       const [isAdding, setIsAdding] = useState(false);
@@ -569,6 +687,7 @@
       const [viewingId, setViewingId] = useState(null); 
       const [editingId, setEditingId] = useState(null); 
       const [editingIngredient, setEditingIngredient] = useState(null);
+      const [showLabelGenerator, setShowLabelGenerator] = useState(false); // NEW STATE
       const [recipeTab, setRecipeTab] = useState('main'); 
       const [filterCategory, setFilterCategory] = useState(null);
       const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -738,6 +857,10 @@
                 <div className="pb-32 pt-safe">
                    <ThemeHeader title="Réglages" theme={theme} />
                    <div className="px-4 pb-4 mt-4">
+                       <ThemeListGroup title="Outils" theme={theme}>
+                          <ThemeListItem label="Générateur d'Étiquettes" icon={Tag} onClick={()=>setShowLabelGenerator(true)} isLast theme={theme} />
+                       </ThemeListGroup>
+
                        <ThemeListGroup title="Apparence" theme={theme}>
                            {Object.values(THEMES).map(t => (
                               <ThemeListItem 
@@ -778,6 +901,8 @@
          <div className={`h-full relative ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}>
             <ThemeAlert isOpen={alertConfig.isOpen} title={alertConfig.title} message={alertConfig.message} onConfirm={alertConfig.onConfirm} onCancel={() => setAlertConfig(prev => ({...prev, isOpen: false}))} theme={theme} />
             
+            {showLabelGenerator && <LabelGenerator recipes={recipes} ingredients={ingredients} settings={settings} onBack={()=>setShowLabelGenerator(false)} theme={theme} />}
+
             {viewingId && !editingId && <RecipeDetailView recipe={recipes.find(r=>r.id===viewingId)} ingredients={ingredients} recipes={recipes} settings={settings} containers={containers} labels={labels} decorations={decorations} foils={foils} onBack={()=>setViewingId(null)} onEdit={()=>setEditingId(viewingId)} theme={theme} />}
             {editingId && <RecipeEditView recipe={editingId==='new'?{id:'new',name:'',category:'Chocolat',ingredients:[],allergens:[]}:recipes.find(r=>r.id===editingId)} ingredients={ingredients} recipes={recipes} categories={categories} settings={settings} containers={containers} labels={labels} decorations={decorations} foils={foils} onCancel={()=>setEditingId(null)} onSave={(r)=>{if(r.id==='new')setRecipes([...recipes,{...r,id:generateId()}]);else setRecipes(recipes.map(x=>x.id===r.id?r:x));setEditingId(null);}} onDelete={editingId!=='new'?()=>{requestConfirm("Supprimer", "Vraiment ?", ()=>{setRecipes(recipes.filter(x=>x.id!==editingId));setEditingId(null);setViewingId(null)})} : undefined} onDuplicate={()=>{ const original = recipes.find(r => r.id === editingId); if (original) { const newRecipe = {...original, id: generateId(), name: `${original.name} (Copie)`}; setRecipes([...recipes, newRecipe]); setEditingId(null); alert("Copié !"); } }} theme={theme} />}
             {editingIngredient && <IngredientEditView ingredient={editingIngredient} categories={categories} onCancel={() => setEditingIngredient(null)} onSave={(ing) => { if (ing.id === 'new') setIngredients([...ingredients, { ...ing, id: generateId() }]); else setIngredients(ingredients.map(x => x.id === ing.id ? ing : x)); setEditingIngredient(null); }} theme={theme} />}
